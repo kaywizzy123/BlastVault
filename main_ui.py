@@ -101,6 +101,10 @@ HeaderWidget {{
     background-color: {BORDER};
     border-bottom: 2px solid {SPLITTER};
 }}
+FooterWidget {{
+    background-color: {BORDER};
+    border-top: 2px solid {SPLITTER};
+}}
 LeftPanel {{
     background-color: {BG};
 }}
@@ -1172,6 +1176,29 @@ class HeaderWidget(QWidget):
 
     def on_refresh(self):
         pass
+    
+    
+    
+class FooterWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setFixedHeight(25)
+        self.setStyleSheet(f"FooterWidget {{ background-color: {BORDER}; border-top: 2px solid {SPLITTER}; }}")
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
+
+    def create_widgets(self):
+        pass
+
+    def create_layout(self):
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(10, 0, 10, 0)
+        self.main_layout.setSpacing(0)
+
+    def create_connections(self):
+        pass
 
 
 class MainWindow(QWidget):
@@ -1216,6 +1243,8 @@ class MainWindow(QWidget):
         self.splitter.setStretchFactor(0, 20)
         self.splitter.setStretchFactor(1, 65)
         self.splitter.setStretchFactor(2, 15)
+        
+        self.footer = FooterWidget()
 
     def create_layout(self):
         main_layout = QVBoxLayout(self)
@@ -1224,6 +1253,7 @@ class MainWindow(QWidget):
         main_layout.setSpacing(0)
         main_layout.addWidget(self.header_widget)
         main_layout.addWidget(self.splitter)
+        main_layout.addWidget(self.footer)
 
     def create_connections(self):
         self.about_action.triggered.connect(self.show_about)
