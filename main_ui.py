@@ -338,6 +338,21 @@ class SettingsDialog(QDialog):
         self.create_connections()
 
     def create_widgets(self):
+        self.studio_name_label = QLabel("Studio Name:")
+        self.studio_name_lineEdit = QLineEdit()
+        self.studio_name_lineEdit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {BG};
+                color: {TEXT_PRI};
+                border: 1px solid {BORDER};
+                border-radius: 4px;
+                padding: 4px 10px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {ACCENT};
+            }}
+        """)
+        
         self.section_label = QLabel("Excluded Folder Patterns")
         self.section_label.setStyleSheet(f"""
             font-size: 14px;
@@ -435,14 +450,23 @@ class SettingsDialog(QDialog):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(10)
+        
+        studio_name_layout = QHBoxLayout()
+        studio_name_layout.addWidget(self.studio_name_label)
+        studio_name_layout.addWidget(self.studio_name_lineEdit)
+        
+        main_layout.addLayout(studio_name_layout)
 
         main_layout.addWidget(self.section_label)
         main_layout.addWidget(self.hint_label)
         main_layout.addWidget(self.pattern_list)
+        
+        
 
         input_layout = QHBoxLayout()
         input_layout.addWidget(self.pattern_input)
         input_layout.addWidget(self.add_btn)
+        
         main_layout.addLayout(input_layout)
 
         main_layout.addWidget(self.remove_btn)
