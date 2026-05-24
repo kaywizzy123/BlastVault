@@ -19,6 +19,7 @@ TEXT_PRI = "#ededed"
 TEXT_SEC = "#a1a1a1"
 FAIL = "#ad0303"
 SUCCESS = "#03ad14"
+SPLITTER = "#292929"
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm"}
@@ -91,13 +92,14 @@ QMenu::item:selected {{
     color: {TEXT_PRI};
 }}
 QSplitter::handle {{
-    background-color: {BORDER};
+    background-color: {SPLITTER};
 }}
 QSplitter::handle:horizontal {{
-    width: 2px;
+    width: 4px;
 }}
 HeaderWidget {{
     background-color: {BORDER};
+    border-bottom: 2px solid {SPLITTER};
 }}
 LeftPanel {{
     background-color: {BG};
@@ -1073,10 +1075,47 @@ class HeaderWidget(QWidget):
             f"background:transparent; font-size: 16px; font-weight: bold; "
             f"color: {ACCENT_HI}; letter-spacing: 2px;"
         )
+        
+        self.department_filter_label = QLabel("Department:")
+        self.department_filter_label.setStyleSheet(
+            f"background:transparent;"
+            f"color: {TEXT_SEC}; letter-spacing: 2px;"
+        )
+        self.department_filter_combobox = QComboBox()
+        self.department_filter_combobox.setFixedWidth(150)
+        self.department_filter_combobox.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {BG};
+                color: {TEXT_PRI};
+                padding: 4px 10px;
+            }}
+            QComboBox:focus {{
+                border: 1px solid {ACCENT};
+            }}
+        """)
+        
+        self.artist_filter_label = QLabel("Artist:")
+        self.artist_filter_label.setStyleSheet(
+            f"background:transparent;"
+            f"color: {TEXT_SEC}; letter-spacing: 2px;"
+        )
+        self.artist_filter_combobox = QComboBox()
+        self.artist_filter_combobox.setFixedWidth(150)
+        self.artist_filter_combobox.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {BG};
+                color: {TEXT_PRI};
+                padding: 4px 10px;
+            }}
+            QComboBox:focus {{
+                border: 1px solid {ACCENT};
+            }}
+        """)
+        
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search...")
-        self.search_bar.setFixedWidth(300)
+        self.search_bar.setFixedWidth(500)
         self.search_bar.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {BG};
@@ -1106,11 +1145,16 @@ class HeaderWidget(QWidget):
 
     def create_layout(self):
         self.main_layout = QHBoxLayout(self)
-        self.main_layout.setContentsMargins(10, 0, 10, 0)
+        self.main_layout.setContentsMargins(10, 0, 10, 10)
         self.main_layout.setSpacing(6)
         self.main_layout.addWidget(self.studio_label)
         self.main_layout.addStretch()
         self.main_layout.addWidget(self.search_bar)
+        self.main_layout.addStretch()
+        self.main_layout.addWidget(self.department_filter_label)
+        self.main_layout.addWidget(self.department_filter_combobox)
+        self.main_layout.addWidget(self.artist_filter_label)
+        self.main_layout.addWidget(self.artist_filter_combobox)
         self.main_layout.addWidget(self.filter_btn)
         self.main_layout.addWidget(self.refresh_btn)
 
@@ -1167,6 +1211,8 @@ class MainWindow(QWidget):
         self.splitter.addWidget(self.right_panel)
 
         self.splitter.setSizes([320, 1295, 305])
+        self.splitter.setContentsMargins(0,0,0,0)
+        self.splitter.setHandleWidth(2)
         self.splitter.setStretchFactor(0, 20)
         self.splitter.setStretchFactor(1, 65)
         self.splitter.setStretchFactor(2, 15)
