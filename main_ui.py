@@ -786,7 +786,7 @@ class CenterPanel(QWidget):
 
     def create_layout(self):
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setContentsMargins(2, 2, 2, 2)
         self.main_layout.setSpacing(0)
         self.main_layout.addWidget(self.list_widget)
 
@@ -888,7 +888,7 @@ class LeftPanel(QWidget):
 
     def create_layout(self):
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setContentsMargins(2, 2, 2, 2)
         self.main_layout.setSpacing(0)
         self.main_layout.addWidget(self.tree_widget)
 
@@ -1215,7 +1215,8 @@ class MainWindow(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    app = QApplication(sys.argv + ['-platform', 'windows:darkmode=1'])
+    app.setStyle("Fusion")
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
