@@ -11,8 +11,8 @@ ROOT_DIR = r"C:\SHOWS"
 ICON = r".\icons\bv.png"
 CONFIG_PATH = r".\config.json"
 
-BG = "#0a0a0a"
-BORDER = "#262626"
+BORDER = "#0a0a0a"
+BG = "#1A1A1A"
 ACCENT_HI = "#1085d3"
 ACCENT = "#0a5b91"
 TEXT_PRI = "#ededed"
@@ -94,7 +94,7 @@ QSplitter::handle {{
     background-color: {BORDER};
 }}
 QSplitter::handle:horizontal {{
-    width: 4px;
+    width: 2px;
 }}
 HeaderWidget {{
     background-color: {BORDER};
@@ -290,9 +290,9 @@ def context_menu_style():
 def dialog_list_style():
     return f"""
         QListWidget {{
-            background-color: {BG};
+            background-color: {BORDER};
             color: {TEXT_PRI};
-            border: 1px solid {BORDER};
+            border: 1px solid {BG};
             border-radius: 4px;
             outline: none;
         }}
@@ -342,9 +342,9 @@ class SettingsDialog(QDialog):
         self.studio_name_lineEdit = QLineEdit()
         self.studio_name_lineEdit.setStyleSheet(f"""
             QLineEdit {{
-                background-color: {BG};
+                background-color: {BORDER};
                 color: {TEXT_PRI};
-                border: 1px solid {BORDER};
+                border: 1px solid {BG};
                 border-radius: 4px;
                 padding: 4px 10px;
             }}
@@ -1166,10 +1166,10 @@ class MainWindow(QWidget):
         self.splitter.addWidget(self.center_panel)
         self.splitter.addWidget(self.right_panel)
 
-        self.splitter.setSizes([384, 1152, 384])
+        self.splitter.setSizes([320, 1295, 305])
         self.splitter.setStretchFactor(0, 20)
-        self.splitter.setStretchFactor(1, 60)
-        self.splitter.setStretchFactor(2, 20)
+        self.splitter.setStretchFactor(1, 65)
+        self.splitter.setStretchFactor(2, 15)
 
     def create_layout(self):
         main_layout = QVBoxLayout(self)
