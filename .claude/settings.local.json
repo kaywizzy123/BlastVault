@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\kayod\\\\OneDrive\\\\Documents\\\\Python Projects\\\\BlastVault\\\\core\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\kayod\\\\OneDrive\\\\Documents\\\\Python Projects\\\\BlastVault\\\\utils\")",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\kayod\\\\OneDrive\\\\Documents\\\\Python Projects\\\\BlastVault\\\\widgets\")",
+      "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\kayod\\\\OneDrive\\\\Documents\\\\Python Projects\\\\BlastVault\\\\dialogs\")",
+      "Bash(Write-Output \"Directories created\")",
+      "Bash(python -c \"import main_ui\")",
+      "Bash(pip show *)",
+      "Bash(where python *)",
+      "Bash(\"C:/Users/kayod/AppData/Local/Python/bin/python.exe\" -c \"import PyQt5; print\\('found'\\)\")",
+      "Bash(\"C:/USDROOT/python/python.exe\" -c \"import PyQt5; print\\('found'\\)\")",
+      "Bash(\"C:/Users/kayod/AppData/Local/Python/bin/python.exe\" -c \"import main_ui\")",
+      "PowerShell(Remove-Item -Recurse -Force \"c:\\\\Users\\\\kayod\\\\OneDrive\\\\Documents\\\\Python Projects\\\\BlastVault\\\\models\" -Confirm:$false)",
+      "PowerShell(Remove-Item -Recurse -Force \"c:\\\\Users\\\\kayod\\\\OneDrive\\\\Documents\\\\Python Projects\\\\BlastVault\\\\controllers\" -Confirm:$false)"
+    ]
+  }
+}

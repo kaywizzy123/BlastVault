@@ -1,0 +1,139 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtGui import QIcon
+
+from core import constants
+from core.constants import ICONS_DIR
+from core.styles import header_btn_style
+
+
+class HeaderWidget(QWidget):
+    toggle_view = pyqtSignal()
+    search_changed = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setFixedHeight(40)
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
+
+    def create_widgets(self):
+        self.studio_label = QLabel(constants.STUDIO_NAME)
+        self.studio_label.setStyleSheet(
+            f"background:transparent; font-size: 16px; font-weight: bold; "
+            f"color: {constants.ACCENT_HI}; letter-spacing: 2px;"
+        )
+
+        self.department_filter_label = QLabel("Department:")
+        self.department_filter_label.setStyleSheet(
+            f"background:transparent; color: {constants.TEXT_SEC}; letter-spacing: 2px;"
+        )
+        self.department_filter_combobox = QComboBox()
+        self.department_filter_combobox.setFixedWidth(150)
+        self.department_filter_combobox.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                padding: 4px 10px;
+            }}
+            QComboBox:focus {{
+                border: 1px solid {constants.ACCENT};
+            }}
+        """)
+
+        self.artist_filter_label = QLabel("Artist:")
+        self.artist_filter_label.setStyleSheet(
+            f"background:transparent; color: {constants.TEXT_SEC}; letter-spacing: 2px;"
+        )
+        self.artist_filter_combobox = QComboBox()
+        self.artist_filter_combobox.setFixedWidth(150)
+        self.artist_filter_combobox.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                padding: 4px 10px;
+            }}
+            QComboBox:focus {{
+                border: 1px solid {constants.ACCENT};
+            }}
+        """)
+
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search...")
+        self.search_bar.setFixedWidth(500)
+        self.search_bar.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.BORDER};
+                border-radius: 4px;
+                padding: 4px 10px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {constants.ACCENT};
+            }}
+        """)
+
+        self.toggle_view_btn = QPushButton()
+        self.toggle_view_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "dashboards.png")))
+        self.toggle_view_btn.setFixedSize(28, 28)
+        self.toggle_view_btn.setIconSize(QSize(20, 20))
+        self.toggle_view_btn.setCheckable(True)
+        self.toggle_view_btn.setChecked(True)
+        self.toggle_view_btn.setStyleSheet(header_btn_style())
+
+        self.refresh_btn = QPushButton()
+        self.refresh_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "refresh.png")))
+        self.refresh_btn.setFixedSize(28, 28)
+        self.refresh_btn.setIconSize(QSize(20, 20))
+        self.refresh_btn.setStyleSheet(header_btn_style())
+
+    def update_studio_label(self, name):
+        self.studio_label.setText(name)
+
+    def create_layout(self):
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(10, 0, 10, 0)
+        self.main_layout.setSpacing(6)
+        self.main_layout.addWidget(self.studio_label)
+        self.main_layout.addStretch()
+        self.main_layout.addWidget(self.search_bar)
+        self.main_layout.addStretch()
+        self.main_layout.addWidget(self.department_filter_label)
+        self.main_layout.addWidget(self.department_filter_combobox)
+        self.main_layout.addWidget(self.artist_filter_label)
+        self.main_layout.addWidget(self.artist_filter_combobox)
+        self.main_layout.addWidget(self.toggle_view_btn)
+        self.main_layout.addWidget(self.refresh_btn)
+
+    def create_connections(self):
+        self.toggle_view_btn.clicked.connect(self.on_toggle_view)
+        self.refresh_btn.clicked.connect(self.on_refresh)
+        self.search_bar.textChanged.connect(self.search_changed)
+
+    def on_toggle_view(self):
+        if self.toggle_view_btn.isChecked():
+            self.toggle_view_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "dashboards.png")))
+        else:
+            self.toggle_view_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "grid.png")))
+        self.toggle_view.emit()
+
+    def on_refresh(self):
+        pass
+
+
+if __name__ == "__main__":
+    from PyQt5.QtWidgets import QApplication
+    from core.styles import styleSheet
+    app = QApplication(sys.argv + ["-platform", "windows:darkmode=1"])
+    app.setStyle("Fusion")
+    app.setStyleSheet(styleSheet)
+    w = HeaderWidget()
+    w.show()
+    sys.exit(app.exec_())
