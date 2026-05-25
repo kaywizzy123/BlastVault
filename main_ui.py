@@ -73,6 +73,8 @@ class MainWindow(QWidget):
         self.header_widget.toggle_view.connect(self.center_panel.toggle_view)
         self.header_widget.search_changed.connect(self.center_panel.filter_items)
         self.header_widget.refresh_btn.clicked.connect(self.on_refresh)
+        self.center_panel.items_loaded.connect(self.footer.update_items)
+        self.center_panel.selection_changed.connect(self.footer.update_selection)
 
     def on_folder_selected(self, path):
         self.header_widget.search_bar.clear()
@@ -93,6 +95,7 @@ class MainWindow(QWidget):
 
     def on_settings_changed(self):
         self.header_widget.update_studio_label(constants.STUDIO_NAME)
+        self.header_widget.reload_departments()
         self.left_panel.refresh_all()
         if self.center_panel.current_path:
             self.center_panel.load_folder(self.center_panel.current_path)

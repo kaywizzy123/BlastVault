@@ -5,10 +5,25 @@
     "editorial",
     "delivery",
     "cameras",
-    "fx"
+    "fx",
+    "audio"
   ],
   "catalogs": [
     "C:\\SHOWS\\SAM"
   ],
-  "studio_name": "NEON ANIMATION STUDIOS"
+  "studio_name": "TEST ANIMATION STUDIOS",
+  "root_dir": "C:/SHOWS",
+  "departments": [
+    "All",
+    "Story",
+    "Concept Art",
+    "Modeling",
+    "Rigging",
+    "Layout",
+    "Animation",
+    "Character FX",
+    "FX / Simulation",
+    "Lighting",
+    "Matte Painting"
+  ]
 }

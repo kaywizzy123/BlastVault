@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from PyQt5.QtWidgets import (
     QDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView
+    QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView, QFileDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -36,10 +36,43 @@ class SettingsDialog(QDialog):
                 color: {constants.TEXT_PRI};
                 border: 1px solid {constants.BG};
                 border-radius: 4px;
-                padding: 4px 10px;
+                padding: 4px 5px;
             }}
             QLineEdit:focus {{
                 border: 1px solid {constants.ACCENT};
+            }}
+        """)
+
+        self.studio_root_label = QLabel("Studio Root:")
+        self.studio_root_lineEdit = QLineEdit()
+        self.studio_root_lineEdit.setText(constants.ROOT_DIR)
+        self.studio_root_lineEdit.setReadOnly(True)
+        self.studio_root_lineEdit.setFocusPolicy(Qt.NoFocus)
+        self.studio_root_lineEdit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.BG};
+                border-radius: 4px;
+                padding: 4px 5px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {constants.ACCENT};
+            }}
+        """)
+
+        self.studio_root_browse_btn = QPushButton("Browse")
+        self.studio_root_browse_btn.setFixedWidth(70)
+        self.studio_root_browse_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_PRI};
+                border: none;
+                padding: 6px 12px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.ACCENT_HI};
             }}
         """)
 
@@ -145,6 +178,12 @@ class SettingsDialog(QDialog):
         studio_name_layout.addWidget(self.studio_name_lineEdit)
         main_layout.addLayout(studio_name_layout)
 
+        studio_root_layout = QHBoxLayout()
+        studio_root_layout.addWidget(self.studio_root_label)
+        studio_root_layout.addWidget(self.studio_root_lineEdit)
+        studio_root_layout.addWidget(self.studio_root_browse_btn)
+        main_layout.addLayout(studio_root_layout)
+
         main_layout.addWidget(self.section_label)
         main_layout.addWidget(self.hint_label)
         main_layout.addWidget(self.pattern_list)
@@ -164,11 +203,17 @@ class SettingsDialog(QDialog):
         main_layout.addLayout(btn_layout)
 
     def create_connections(self):
+        self.studio_root_browse_btn.clicked.connect(self.on_browse_root)
         self.add_btn.clicked.connect(self.on_add)
         self.remove_btn.clicked.connect(self.on_remove)
         self.save_btn.clicked.connect(self.on_save)
         self.cancel_btn.clicked.connect(self.reject)
         self.pattern_input.returnPressed.connect(self.on_add)
+
+    def on_browse_root(self):
+        path = QFileDialog.getExistingDirectory(self, "Select Studio Root", self.studio_root_lineEdit.text())
+        if path:
+            self.studio_root_lineEdit.setText(path)
 
     def on_add(self):
         text = self.pattern_input.text().strip()
@@ -188,6 +233,7 @@ class SettingsDialog(QDialog):
             for i in range(self.pattern_list.count())
         ]
         constants.STUDIO_NAME = self.studio_name_lineEdit.text().strip() or constants.STUDIO_NAME
+        constants.ROOT_DIR = self.studio_root_lineEdit.text().strip() or constants.ROOT_DIR
         save_config()
         self.settings_changed.emit()
         self.accept()

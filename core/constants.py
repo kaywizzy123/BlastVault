@@ -33,3 +33,17 @@ OBJ_3D_EXTS = {".fbx", ".usd", ".usda", ".usdc", ".usdz"}
 ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS | OBJ_3D_EXTS | DOC_EXTS
 
 EXCLUDED_PATTERNS = []
+
+DEPARTMENTS = [
+    "All",
+    "Story",
+    "Concept Art",
+    "Modeling",
+    "Rigging",
+    "Layout",
+    "Animation",
+    "Character FX",
+    "FX / Simulation",
+    "Lighting",
+    "Matte Painting",
+]

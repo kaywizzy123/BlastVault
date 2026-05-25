@@ -1,3 +1,5 @@
+from tkinter import constants
+
 from .constants import (
     BG, TEXT_PRI, TEXT_SEC, BORDER, ACCENT, ACCENT_HI, SPLITTER_COLOR
 )
@@ -176,6 +178,7 @@ def dialog_list_style():
             color: {TEXT_PRI};
             border: 1px solid {BG};
             border-radius: 4px;
+            padding: 4px 5px;
             outline: none;
         }}
         QListWidget::item {{
@@ -196,11 +199,21 @@ def input_style():
         QLineEdit {{
             background-color: {BORDER};
             color: {TEXT_PRI};
-            border: 1px solid {BORDER};
+            border: 1px solid {SPLITTER_COLOR};
             border-radius: 4px;
             padding: 4px 8px;
         }}
         QLineEdit:focus {{
+            border: 1px solid {ACCENT};
+        }}
+        QTextEdit {{
+            background-color: {BORDER};
+            color: {TEXT_PRI};
+            border: 1px solid {SPLITTER_COLOR};
+            border-radius: 4px;
+            padding: 4px 8px;
+        }}
+        QTextEdit:focus {{
             border: 1px solid {ACCENT};
         }}
     """

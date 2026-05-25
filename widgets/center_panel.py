@@ -29,6 +29,8 @@ def _version_key(stem):
 
 class CenterPanel(QWidget):
     folder_changed = pyqtSignal(str)
+    items_loaded = pyqtSignal(int)
+    selection_changed = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,6 +60,10 @@ class CenterPanel(QWidget):
 
     def create_connections(self):
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
+        self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
+
+    def _on_selection_changed(self):
+        self.selection_changed.emit(len(self.list_widget.selectedItems()))
 
     def load_folder(self, path):
         self.current_path = path
@@ -131,6 +137,8 @@ class CenterPanel(QWidget):
             self.thumbnail_loader.thumbnail_ready.connect(self.on_thumbnail_ready)
             self.thumbnail_loader.start()
 
+        self.items_loaded.emit(self.list_widget.count())
+
     def _load_direct(self, folder, icon_size):
         """Show immediate contents: subfolders then files."""
         thumbnail_paths = []
@@ -169,6 +177,8 @@ class CenterPanel(QWidget):
             self.thumbnail_loader = ThumbnailLoader(thumbnail_paths, icon_size)
             self.thumbnail_loader.thumbnail_ready.connect(self.on_thumbnail_ready)
             self.thumbnail_loader.start()
+
+        self.items_loaded.emit(self.list_widget.count())
 
     def on_thumbnail_ready(self, path, icon):
         for i in range(self.list_widget.count()):

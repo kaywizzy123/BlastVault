@@ -32,37 +32,49 @@ class HeaderWidget(QWidget):
 
         self.department_filter_label = QLabel("Department:")
         self.department_filter_label.setStyleSheet(
-            f"background:transparent; color: {constants.TEXT_SEC}; letter-spacing: 2px;"
+            f"background:transparent; color: {constants.TEXT_SEC};"
         )
         self.department_filter_combobox = QComboBox()
         self.department_filter_combobox.setFixedWidth(150)
-        self.department_filter_combobox.setStyleSheet(f"""
+        self.department_filter_combobox.addItems(constants.DEPARTMENTS)
+        _arrow = os.path.join(ICONS_DIR, "arrow-down-sign-to-navigate.png").replace("\\", "/")
+        _combo_style = f"""
             QComboBox {{
                 background-color: {constants.BG};
                 color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
                 padding: 4px 10px;
             }}
             QComboBox:focus {{
                 border: 1px solid {constants.ACCENT};
             }}
-        """)
+            QComboBox QAbstractItemView {{
+                background-color: {constants.BORDER};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.BG};
+                outline: none;
+                selection-background-color: {constants.ACCENT};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 24px;
+            }}
+            QComboBox::down-arrow {{
+                image: url({_arrow});
+                width: 12px;
+                height: 12px;
+            }}
+        """
+        self.department_filter_combobox.setStyleSheet(_combo_style)
 
         self.artist_filter_label = QLabel("Artist:")
         self.artist_filter_label.setStyleSheet(
-            f"background:transparent; color: {constants.TEXT_SEC}; letter-spacing: 2px;"
+            f"background:transparent; color: {constants.TEXT_SEC};"
         )
         self.artist_filter_combobox = QComboBox()
         self.artist_filter_combobox.setFixedWidth(150)
-        self.artist_filter_combobox.setStyleSheet(f"""
-            QComboBox {{
-                background-color: {constants.BG};
-                color: {constants.TEXT_PRI};
-                padding: 4px 10px;
-            }}
-            QComboBox:focus {{
-                border: 1px solid {constants.ACCENT};
-            }}
-        """)
+        self.artist_filter_combobox.setStyleSheet(_combo_style)
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search...")
@@ -71,7 +83,7 @@ class HeaderWidget(QWidget):
             QLineEdit {{
                 background-color: {constants.BG};
                 color: {constants.TEXT_PRI};
-                border: 1px solid {constants.BORDER};
+                border: 1px solid {constants.SPLITTER_COLOR};
                 border-radius: 4px;
                 padding: 4px 10px;
             }}
@@ -96,6 +108,10 @@ class HeaderWidget(QWidget):
 
     def update_studio_label(self, name):
         self.studio_label.setText(name)
+
+    def reload_departments(self):
+        self.department_filter_combobox.clear()
+        self.department_filter_combobox.addItems(constants.DEPARTMENTS)
 
     def create_layout(self):
         self.main_layout = QHBoxLayout(self)
