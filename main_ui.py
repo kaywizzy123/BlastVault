@@ -1,4 +1,5 @@
 import sys
+
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QMenuBar, QSplitter
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -74,6 +75,7 @@ class MainWindow(QWidget):
         self.header_widget.search_changed.connect(self.center_panel.filter_items)
         self.header_widget.department_changed.connect(self.center_panel.filter_department)
         self.header_widget.refresh_btn.clicked.connect(self.on_refresh)
+        self.header_widget.thumb_size_changed.connect(self.center_panel.set_thumb_size)
         self.center_panel.items_loaded.connect(self.footer.update_items)
         self.center_panel.selection_changed.connect(self.footer.update_selection)
         self.center_panel.file_selected.connect(self.right_panel.display_metadata)

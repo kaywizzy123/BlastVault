@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QListWidget, QListWidgetItem,
     QAbstractItemView, QLabel, QApplication,
 )
-from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher
 from PyQt5.QtGui import QIcon, QPixmap, QCursor
 
 from core import constants
@@ -93,6 +93,7 @@ class CenterPanel(QWidget):
         self.create_widgets()
         self.create_layout()
         self.create_connections()
+        self._setup_watcher()
 
     # ------------------------------------------------------------------ #
     #  Widget / layout construction                                        #
@@ -136,6 +137,16 @@ class CenterPanel(QWidget):
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
 
+    def _setup_watcher(self):
+        """Initialise the folder watcher and its 2-second debounce timer."""
+        self._watcher = QFileSystemWatcher(self)
+        self._watcher.directoryChanged.connect(self._on_directory_changed)
+
+        self._reload_timer = QTimer(self)
+        self._reload_timer.setSingleShot(True)
+        self._reload_timer.setInterval(2000)          # 2 s debounce
+        self._reload_timer.timeout.connect(self._silent_reload)
+
     # ------------------------------------------------------------------ #
     #  Public API                                                          #
     # ------------------------------------------------------------------ #
@@ -149,6 +160,11 @@ class CenterPanel(QWidget):
             self.thumbnail_loader.stop()
             self.thumbnail_loader.terminate()
             self.thumbnail_loader.wait()
+
+        # Keep the watcher pointed at the new folder
+        for old in self._watcher.directories():
+            self._watcher.removePath(old)
+        self._watcher.addPath(path)
 
         icon_size = (
             (constants.GRID_ICON_W, constants.GRID_ICON_H)
@@ -338,8 +354,8 @@ class CenterPanel(QWidget):
             self.file_selected.emit("")
 
     def on_item_double_clicked(self, item):
+        path = item.data(Qt.UserRole)
         if item.data(Qt.UserRole + 1):   # is folder
-            path = item.data(Qt.UserRole)
             self.load_folder(path)
             self.folder_changed.emit(path)
 
@@ -420,6 +436,38 @@ class CenterPanel(QWidget):
         if pixmap and not pixmap.isNull():
             self._preview_popup.show_at(pixmap, QCursor.pos())
             self._autohide_timer.start()
+
+    # ------------------------------------------------------------------ #
+    #  Thumbnail size                                                      #
+    # ------------------------------------------------------------------ #
+
+    def set_thumb_size(self, width: int):
+        """Resize grid icons to *width* × (*width* × 9/16) and reload."""
+        constants.GRID_ICON_W    = width
+        constants.GRID_ICON_H    = width * 9 // 16
+        constants.GRID_ICON_SIZE = width
+        constants.GRID_CELL_SIZE = (width + 20, width * 9 // 16 + 28)
+        self.list_widget.setIconSize(QSize(constants.GRID_ICON_W, constants.GRID_ICON_H))
+        self.list_widget.setGridSize(QSize(*constants.GRID_CELL_SIZE))
+        if self.current_path:
+            self.load_folder(self.current_path)
+
+    # ------------------------------------------------------------------ #
+    #  Watch-folder auto-refresh                                           #
+    # ------------------------------------------------------------------ #
+
+    def _on_directory_changed(self, __path: str):
+        """Received from QFileSystemWatcher; (re)starts the debounce timer."""
+        self._reload_timer.start()    # calling start() on a running timer resets it
+
+    def _silent_reload(self):
+        """Reload the current folder while preserving the scroll position."""
+        if not self.current_path:
+            return
+        sb  = self.list_widget.verticalScrollBar()
+        pos = sb.value()
+        self.load_folder(self.current_path)
+        sb.setValue(pos)
 
     def _reset_hover(self):
         """Stop both timers and hide the popup."""

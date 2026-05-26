@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QFrame
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QFrame, QSlider
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QIcon
 
@@ -12,9 +12,10 @@ from core.styles import header_btn_style
 
 
 class HeaderWidget(QWidget):
-    toggle_view = pyqtSignal()
-    search_changed = pyqtSignal(str)
+    toggle_view        = pyqtSignal()
+    search_changed     = pyqtSignal(str)
     department_changed = pyqtSignal(str)
+    thumb_size_changed = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -96,6 +97,27 @@ class HeaderWidget(QWidget):
             }}
         """)
 
+        # Thumbnail size slider
+
+        self.thumb_slider = QSlider(Qt.Horizontal)
+        self.thumb_slider.setRange(80, 240)
+        self.thumb_slider.setValue(constants.GRID_ICON_W)
+        self.thumb_slider.setFixedWidth(80)
+        self.thumb_slider.setFixedHeight(20)
+        self.thumb_slider.setCursor(Qt.PointingHandCursor)
+        self.thumb_slider.setToolTip(f"{constants.GRID_ICON_W}px")
+        self.thumb_slider.setStyleSheet(
+            f"QSlider {{ background: transparent; }}"
+            f"QSlider::groove:horizontal {{"
+            f"  background: {constants.SPLITTER_COLOR}; height: 4px; border-radius: 2px; }}"
+            f"QSlider::handle:horizontal {{"
+            f"  background: {constants.ACCENT_HI}; width: 10px; height: 10px;"
+            f"  margin: -3px 0; border-radius: 5px; }}"
+            f"QSlider::sub-page:horizontal {{"
+            f"  background: {constants.ACCENT}; border-radius: 2px; }}"
+        )
+
+
         self.toggle_view_btn = QPushButton()
         self.toggle_view_btn.setIcon(QIcon(str(ICONS_DIR / "dashboards.png")))
         self.toggle_view_btn.setFixedSize(28, 28)
@@ -125,10 +147,35 @@ class HeaderWidget(QWidget):
         self.main_layout.addStretch()
         self.main_layout.addWidget(self.search_bar)
         self.main_layout.addStretch()
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(
+            f"background-color: {constants.SPLITTER_COLOR}; margin: 8px 2px;"
+        )
+        self.main_layout.addWidget(sep)
         self.main_layout.addWidget(self.department_filter_label)
         self.main_layout.addWidget(self.department_filter_combobox)
         self.main_layout.addWidget(self.artist_filter_label)
         self.main_layout.addWidget(self.artist_filter_combobox)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(
+            f"background-color: {constants.SPLITTER_COLOR}; margin: 8px 2px;"
+        )
+        self.main_layout.addWidget(sep)
+        self.main_layout.addWidget(self.thumb_slider)
+        
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(
+            f"background-color: {constants.SPLITTER_COLOR}; margin: 8px 2px;"
+        )
+        self.main_layout.addWidget(sep)
+
         self.main_layout.addWidget(self.toggle_view_btn)
         self.main_layout.addWidget(self.refresh_btn)
 
@@ -137,6 +184,11 @@ class HeaderWidget(QWidget):
         self.refresh_btn.clicked.connect(self.on_refresh)
         self.search_bar.textChanged.connect(self.search_changed)
         self.department_filter_combobox.currentTextChanged.connect(self.department_changed)
+        self.thumb_slider.valueChanged.connect(self._on_thumb_slider_changed)
+
+    def _on_thumb_slider_changed(self, value: int):
+        self.thumb_slider.setToolTip(f"{value}px")
+        self.thumb_size_changed.emit(value)
 
     def on_toggle_view(self):
         if self.toggle_view_btn.isChecked():
