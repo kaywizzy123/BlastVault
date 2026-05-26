@@ -13,40 +13,19 @@ THUMB_CACHE_DIR = _ROOT / "thumbnail_cache"
 
 # Platform-specific defaults — users override these in Settings.
 if _sys.platform == "win32":
-    ROOT_DIR = r"C:\SHOWS"
-    _FFMPEG_CANDIDATES = [
-        r"C:\ffmpeg\bin\ffmpeg.exe",
-        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-    ]
+    ROOT_DIR    = r"C:\SHOWS"
+    FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
 elif _sys.platform == "darwin":
-    ROOT_DIR = str(Path.home() / "Shows")
-    _FFMPEG_CANDIDATES = [
-        "/opt/homebrew/bin/ffmpeg",   # Homebrew Apple Silicon
-        "/usr/local/bin/ffmpeg",      # Homebrew Intel / manual
-        "/opt/local/bin/ffmpeg",      # MacPorts
-    ]
-else:                                 # Linux / other
-    ROOT_DIR = str(Path.home() / "Shows")
-    _FFMPEG_CANDIDATES = [
-        "/usr/bin/ffmpeg",            # apt / yum package
-        "/usr/local/bin/ffmpeg",      # compiled from source
-        "/snap/bin/ffmpeg",           # snap package
-    ]
-
-def _find_ffmpeg() -> str:
-    """Return the ffmpeg binary path, checking PATH first then known locations."""
-    # 1. Whatever is on the system PATH (conda envs, custom installs, etc.)
-    found = _shutil.which("ffmpeg")
-    if found:
-        return found
-    # 2. Known platform-specific locations
-    for candidate in _FFMPEG_CANDIDATES:
-        if Path(candidate).exists():
-            return candidate
-    # 3. Last resort: return first candidate — thumbnail_loader checks existence
-    return _FFMPEG_CANDIDATES[0]
-
-FFMPEG_PATH = _find_ffmpeg()
+    ROOT_DIR    = str(Path.home() / "Shows")
+    # Homebrew Apple Silicon → /opt/homebrew, Intel/manual → /usr/local
+    FFMPEG_PATH = (
+        "/opt/homebrew/bin/ffmpeg"
+        if Path("/opt/homebrew/bin/ffmpeg").exists()
+        else "/usr/local/bin/ffmpeg"
+    )
+else:                                           # Linux / other
+    ROOT_DIR    = str(Path.home() / "Shows")
+    FFMPEG_PATH = "/usr/bin/ffmpeg"
 
 GRID_ICON_W    = 180          # icon width  — wider to fill 16:9 video frames
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
@@ -57,7 +36,7 @@ LIST_ICON_SIZE = 60
 BORDER = "#0a0a0a"
 BG = "#1A1A1A"
 ACCENT_HI = "#1085d3"
-ACCENT = "#0a5b91"
+ACCENT = "#343434"
 TEXT_PRI = "#ededed"
 TEXT_SEC = "#a1a1a1"
 FAIL = "#ad0303"

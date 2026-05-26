@@ -1,10 +1,11 @@
 import sys
 import os
+import subprocess
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QListWidget, QListWidgetItem,
-    QAbstractItemView, QLabel, QApplication,
+    QAbstractItemView, QLabel, QApplication, QMenu,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher
 from PyQt5.QtGui import QIcon, QPixmap, QCursor
@@ -12,6 +13,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QCursor
 from core import constants
 from core.constants import detect_department, canonical_stem, version_key
 from core.config import is_excluded
+from core.styles import context_menu_style
 from utils.icons import (
     colored_icon, make_placeholder_icon, get_file_icon,
     get_cached_video_icon, get_clapperboard_icon, get_video_cache_path,
@@ -123,6 +125,9 @@ class CenterPanel(QWidget):
         self._autohide_timer.setInterval(10000)      # hide after 10 s of no movement
         self._autohide_timer.timeout.connect(self._preview_popup.hide_preview)
 
+        self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.installEventFilter(self)   # keyboard nav
+
         self.list_widget.setMouseTracking(True)
         self.list_widget.viewport().setMouseTracking(True)
         self.list_widget.viewport().installEventFilter(self)
@@ -136,6 +141,7 @@ class CenterPanel(QWidget):
     def create_connections(self):
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
+        self.list_widget.customContextMenuRequested.connect(self._show_context_menu)
 
     def _setup_watcher(self):
         """Initialise the folder watcher and its 2-second debounce timer."""
@@ -413,6 +419,18 @@ class CenterPanel(QWidget):
                         self._hover_timer.start()
             elif etype in (QEvent.Leave, QEvent.MouseButtonPress):
                 self._reset_hover()
+        elif obj is self.list_widget and event.type() == QEvent.KeyPress:
+            key = event.key()
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                self._on_enter_key()
+                return True
+            elif key == Qt.Key_Backspace:
+                self._on_backspace_key()
+                return True
+            elif key == Qt.Key_F5:
+                if self.current_path:
+                    self.load_folder(self.current_path)
+                return True
         return super().eventFilter(obj, event)
 
     def _show_hover_preview(self):
@@ -468,6 +486,97 @@ class CenterPanel(QWidget):
         pos = sb.value()
         self.load_folder(self.current_path)
         sb.setValue(pos)
+
+    # ------------------------------------------------------------------ #
+    #  Keyboard navigation                                                 #
+    # ------------------------------------------------------------------ #
+
+    def _on_enter_key(self):
+        """Enter / Return — navigate into the selected folder."""
+        items = self.list_widget.selectedItems()
+        if len(items) == 1 and items[0].data(Qt.UserRole + 1):
+            path = items[0].data(Qt.UserRole)
+            self.load_folder(path)
+            self.folder_changed.emit(path)
+
+    def _on_backspace_key(self):
+        """Backspace — go up one folder level."""
+        if not self.current_path:
+            return
+        parent = str(Path(self.current_path).parent)
+        if parent != self.current_path:   # guard: already at filesystem root
+            self.load_folder(parent)
+            self.folder_changed.emit(parent)
+
+    # ------------------------------------------------------------------ #
+    #  Context menu                                                        #
+    # ------------------------------------------------------------------ #
+
+    def _show_context_menu(self, pos):
+        items = self.list_widget.selectedItems()
+        if not items:
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet(context_menu_style())
+        paths = [it.data(Qt.UserRole) for it in items]
+
+        if len(items) == 1:
+            item      = items[0]
+            path      = paths[0]
+            is_folder = bool(item.data(Qt.UserRole + 1))
+
+            if is_folder:
+                open_act = menu.addAction("Open Folder")
+                open_act.triggered.connect(lambda: (
+                    self.load_folder(path), self.folder_changed.emit(path)
+                ))
+                menu.addSeparator()
+
+            copy_path_act = menu.addAction("Copy Path")
+            copy_path_act.triggered.connect(lambda: self._copy_to_clipboard(path))
+
+            copy_name_act = menu.addAction("Copy Name")
+            copy_name_act.triggered.connect(
+                lambda: self._copy_to_clipboard(Path(path).name)
+            )
+
+            if not is_folder:
+                menu.addSeparator()
+                if sys.platform == "win32":
+                    reveal_label = "Show in Explorer"
+                elif sys.platform == "darwin":
+                    reveal_label = "Reveal in Finder"
+                else:
+                    reveal_label = "Show in Files"
+                reveal_act = menu.addAction(reveal_label)
+                reveal_act.triggered.connect(lambda: self._reveal_in_explorer(path))
+        else:
+            copy_all_act = menu.addAction(f"Copy {len(items)} Paths")
+            copy_all_act.triggered.connect(
+                lambda: self._copy_to_clipboard("\n".join(paths))
+            )
+
+        menu.exec_(self.list_widget.viewport().mapToGlobal(pos))
+
+    def _copy_to_clipboard(self, text: str):
+        QApplication.clipboard().setText(text)
+
+    def _reveal_in_explorer(self, path: str):
+        """Open the file's parent folder and select/highlight the file."""
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", "/select,", path])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", path])
+            else:
+                subprocess.Popen(["xdg-open", str(Path(path).parent)])
+        except Exception as e:
+            print(f"Could not reveal in explorer: {e}")
+
+    # ------------------------------------------------------------------ #
+    #  Hover-reset                                                         #
+    # ------------------------------------------------------------------ #
 
     def _reset_hover(self):
         """Stop both timers and hide the popup."""

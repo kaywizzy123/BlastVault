@@ -114,7 +114,7 @@ class HeaderWidget(QWidget):
             f"  background: {constants.ACCENT_HI}; width: 10px; height: 10px;"
             f"  margin: -3px 0; border-radius: 5px; }}"
             f"QSlider::sub-page:horizontal {{"
-            f"  background: {constants.ACCENT}; border-radius: 2px; }}"
+            f"  background: {constants.ACCENT_HI}; border-radius: 2px; }}"
         )
 
 

@@ -126,12 +126,11 @@ QListWidget::item:selected {{
 }}
 QScrollBar:vertical {{
     background-color: {BG};
-    width: 8px;
-    border: none;
+    width: 10px;
+    border: 1px solid {SPLITTER_COLOR};
 }}
 QScrollBar::handle:vertical {{
     background-color: {BORDER};
-    border-radius: 4px;
     min-height: 20px;
 }}
 QScrollBar::handle:vertical:hover {{
@@ -143,12 +142,11 @@ QScrollBar::sub-line:vertical {{
 }}
 QScrollBar:horizontal {{
     background-color: {BG};
-    height: 8px;
-    border: none;
+    height: 10px;
+    border: 1px solid {SPLITTER_COLOR};
 }}
 QScrollBar::handle:horizontal {{
     background-color: {BORDER};
-    border-radius: 4px;
     min-width: 20px;
 }}
 QScrollBar::handle:horizontal:hover {{
