@@ -1,6 +1,6 @@
 import sys
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QMenuBar, QSplitter
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QMenuBar, QSplitter, QAction
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
@@ -34,6 +34,9 @@ class MainWindow(QWidget):
         options_menu = self.menu_bar.addMenu("Options")
         self.settings_action = options_menu.addAction("Settings")
         self.about_action = options_menu.addAction("About")
+        # Prevent macOS from merging these into the system application menu
+        self.settings_action.setMenuRole(QAction.NoRole)
+        self.about_action.setMenuRole(QAction.NoRole)
 
         self.header_widget = HeaderWidget()
 
