@@ -11,9 +11,11 @@ CONFIG_PATH = _ROOT / "config.json"
 THUMB_CACHE_DIR = _ROOT / "thumbnail_cache"
 FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
 
-GRID_ICON_SIZE = 160
-GRID_CELL_SIZE = (180, 200)
-LIST_ICON_SIZE = 48
+GRID_ICON_W    = 180          # icon width  — wider to fill 16:9 video frames
+GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
+GRID_ICON_SIZE = GRID_ICON_W  # kept for thumbnail-loader / icon-builder compat
+GRID_CELL_SIZE = (196, 130)   # cell: slightly wider than icon + row for label
+LIST_ICON_SIZE = 60
 
 BORDER = "#0a0a0a"
 BG = "#1A1A1A"
@@ -83,7 +85,16 @@ DEPARTMENT_KEYWORDS: dict[str, str] = {
     "mattepaint": "Matte Painting",
 }
 
-_SPLIT_RE = _re.compile(r'[_\-.\s]+')
+_SPLIT_RE   = _re.compile(r'[_\-.\s]+')
+_VERSION_RE = _re.compile(r'_v(\d+)$', _re.IGNORECASE)
+
+
+def version_key(stem: str) -> tuple:
+    """Return ``(base_stem, version_int)`` if *stem* ends in ``_v###``, else ``(None, None)``."""
+    m = _VERSION_RE.search(stem)
+    if m:
+        return stem[:m.start()], int(m.group(1))
+    return None, None
 
 
 def detect_department(filename: str) -> str:

@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 
 from core.constants import THUMB_CACHE_DIR, FFMPEG_PATH, VIDEO_EXTS
-from utils.icons import get_file_icon, get_video_cache_path
+from utils.icons import get_file_icon, get_video_cache_path, _letterbox_icon
 
 
 class ThumbnailLoader(QThread):
@@ -55,11 +55,7 @@ class ThumbnailLoader(QThread):
             if Path(cache_path).exists():
                 pixmap = QPixmap(cache_path)
                 if not pixmap.isNull():
-                    return QIcon(pixmap.scaled(
-                        self.icon_size, self.icon_size,
-                        Qt.KeepAspectRatio,
-                        Qt.SmoothTransformation
-                    ))
+                    return _letterbox_icon(pixmap, self.icon_size)
         except Exception as e:
             print(f"Video thumbnail error for {path}: {e}")
         return None

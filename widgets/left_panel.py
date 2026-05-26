@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QMenu, QDialog
 )
-from PyQt5.QtCore import Qt, QDir, pyqtSignal
+from PyQt5.QtCore import Qt, QDir, QEvent, pyqtSignal
 
 from core import constants
 from core.config import is_excluded, save_config
@@ -22,7 +22,7 @@ class LeftPanel(QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.folder_closed = colored_icon(constants.ACCENT, closed=True)
-        self.folder_open = colored_icon(constants.ACCENT, closed=False)
+        self.folder_open = colored_icon(constants.ACCENT_HI, closed=False)
         self.create_widgets()
         self.create_layout()
         self.create_connections()
@@ -32,6 +32,7 @@ class LeftPanel(QWidget):
         self.tree_widget.header().hide()
         self.tree_widget.setColumnCount(1)
         self.tree_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree_widget.viewport().installEventFilter(self)
 
     def create_layout(self):
         self.main_layout = QVBoxLayout(self)
@@ -44,6 +45,36 @@ class LeftPanel(QWidget):
         self.tree_widget.itemCollapsed.connect(self.on_item_collapsed)
         self.tree_widget.itemClicked.connect(self.on_item_clicked)
         self.tree_widget.customContextMenuRequested.connect(self.on_context_menu)
+
+    # ------------------------------------------------------------------ #
+    #  Collapse / expand all  (Shift + Left Click)                         #
+    # ------------------------------------------------------------------ #
+
+    def eventFilter(self, obj, event):
+        if obj is self.tree_widget.viewport():
+            if (event.type() == QEvent.MouseButtonPress
+                    and event.button() == Qt.LeftButton
+                    and event.modifiers() & Qt.ShiftModifier):
+                item = self.tree_widget.itemAt(event.pos())
+                if item:
+                    if item.isExpanded():
+                        self._collapse_recursive(item)
+                    else:
+                        self._expand_recursive(item)
+                    return True   # consume — don't also fire the normal click
+        return super().eventFilter(obj, event)
+
+    def _expand_recursive(self, item):
+        """Expand *item* and all its descendants."""
+        self.tree_widget.expandItem(item)   # triggers on_item_expanded → loads children
+        for i in range(item.childCount()):
+            self._expand_recursive(item.child(i))
+
+    def _collapse_recursive(self, item):
+        """Collapse *item* and all its descendants."""
+        for i in range(item.childCount()):
+            self._collapse_recursive(item.child(i))
+        self.tree_widget.collapseItem(item)
 
     def add_catalog(self):
         dialog = AddCatalogDialog(self)

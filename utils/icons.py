@@ -4,56 +4,115 @@ from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
 
 from core.constants import (
     BORDER, TEXT_PRI, THUMB_CACHE_DIR, ICONS_DIR,
-    IMAGE_EXTS, AUDIO_EXTS, OBJ_3D_EXTS, DOC_EXTS
+    IMAGE_EXTS, AUDIO_EXTS, OBJ_3D_EXTS, DOC_EXTS,
 )
 
 
-def colored_icon(color, closed=True, size=16):
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
-    c = QColor(color)
-    painter.setBrush(c)
-    painter.setPen(Qt.NoPen)
-    if closed:
-        painter.drawRoundedRect(0, int(size * 0.25), int(size * 0.5), int(size * 0.19), 1, 1)
-        painter.drawRoundedRect(0, int(size * 0.375), size, int(size * 0.5625), 1, 1)
-    else:
-        painter.drawRoundedRect(0, int(size * 0.1875), int(size * 0.5), int(size * 0.1875), 1, 1)
-        painter.drawRoundedRect(0, int(size * 0.3125), size, int(size * 0.625), 1, 1)
-        darker = QColor(color)
-        darker.setAlpha(160)
-        painter.setBrush(darker)
-        painter.drawRoundedRect(int(size * 0.0625), int(size * 0.3125), int(size * 0.875), int(size * 0.1875), 1, 1)
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Internal helpers                                                             #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+def _wh(size) -> tuple[int, int]:
+    """Return ``(width, height)`` from either an ``int`` or a ``(w, h)`` tuple."""
+    return (size, size) if isinstance(size, int) else tuple(size)
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Icon builders                                                                #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+def _letterbox_icon(pixmap: QPixmap, size) -> QIcon:
+    """Scale *pixmap* preserving aspect ratio, then pad with black to fill the
+    target canvas.  *size* may be an ``int`` (square) or a ``(w, h)`` tuple."""
+    w, h = _wh(size)
+    scaled = pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    canvas = QPixmap(w, h)
+    canvas.fill(Qt.black)
+    painter = QPainter(canvas)
+    painter.drawPixmap((w - scaled.width()) // 2, (h - scaled.height()) // 2, scaled)
     painter.end()
-    return QIcon(pixmap)
+    return QIcon(canvas)
 
 
-def make_placeholder_icon(color, size, symbol="?"):
-    pixmap = QPixmap(size, size)
+def _fill_icon(pixmap: QPixmap, size) -> QIcon:
+    """Centre-crop *pixmap* to fill the target canvas exactly.
+    *size* may be an ``int`` (square) or a ``(w, h)`` tuple."""
+    w, h = _wh(size)
+    scaled = pixmap.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    x = (scaled.width()  - w) // 2
+    y = (scaled.height() - h) // 2
+    return QIcon(scaled.copy(x, y, w, h))
+
+
+def colored_icon(color, closed=True, size=16):
+    """Folder icon sized to fill the full *size* area.
+    *size* may be an ``int`` (square) or a ``(w, h)`` tuple.
+
+    The tab is drawn first, then the body is painted on top — its top edge
+    covers the tab's rounded bottom corners so the two shapes read as one.
+    """
+    w, h   = _wh(size)
+    r      = max(min(w, h) // 10, 2)
+    body_y = int(h * 0.18)
+    tab_w  = int(w * 0.45)
+    tab_h  = body_y + r * 4    # overlap ensures seamless join
+
+    pixmap = QPixmap(w, h)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.Antialiasing)
     painter.setBrush(QColor(color))
     painter.setPen(Qt.NoPen)
-    painter.drawRoundedRect(0, 0, size, size, 4, 4)
-    painter.setPen(QColor(TEXT_PRI))
-    font = painter.font()
-    font.setPixelSize(max(size // 2, 8))
-    font.setBold(True)
-    painter.setFont(font)
-    painter.drawText(QRect(0, 0, size, size), Qt.AlignCenter, symbol)
+
+    # 1. Tab — drawn first so the body can cover its bottom rounded edge
+    painter.drawRoundedRect(0, 0, tab_w, tab_h, r, r)
+
+    # 2. Body — starts at body_y and covers the tab's bottom, unifying the shape
+    painter.drawRoundedRect(0, body_y, w, h - body_y, r, r)
+
+    if not closed:
+        # Darken the inner area to suggest the folder is open
+        inner = QColor(color)
+        inner.setAlpha(150)
+        painter.setBrush(inner)
+        m = max(r, int(min(w, h) * 0.08))
+        painter.drawRoundedRect(m, body_y + m, w - 2 * m, h - body_y - 2 * m, max(r - 2, 2), max(r - 2, 2))
+
     painter.end()
     return QIcon(pixmap)
 
 
-def get_file_icon(path, icon_size):
+def make_placeholder_icon(color, size, symbol: str = "?") -> QIcon:
+    """Rounded-rectangle placeholder icon.
+    *size* may be an ``int`` (square) or a ``(w, h)`` tuple."""
+    w, h = _wh(size)
+    pixmap = QPixmap(w, h)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setBrush(QColor(color))
+    painter.setPen(Qt.NoPen)
+    painter.drawRoundedRect(0, 0, w, h, 4, 4)
+    painter.setPen(QColor(TEXT_PRI))
+    font = painter.font()
+    font.setPixelSize(max(min(w, h) // 2, 8))
+    font.setBold(True)
+    painter.setFont(font)
+    painter.drawText(QRect(0, 0, w, h), Qt.AlignCenter, symbol)
+    painter.end()
+    return QIcon(pixmap)
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  File-type icon dispatcher                                                    #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+def get_file_icon(path, icon_size) -> QIcon:
     ext = Path(path).suffix.lower()
     if ext in IMAGE_EXTS:
         pixmap = QPixmap(path)
         if not pixmap.isNull():
-            return QIcon(pixmap.scaled(icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            return _fill_icon(pixmap, icon_size)
         return make_placeholder_icon(BORDER, icon_size, "IMG")
     elif ext in AUDIO_EXTS:
         return make_placeholder_icon("#2e1a2e", icon_size, "♫")
@@ -65,30 +124,27 @@ def get_file_icon(path, icon_size):
         return make_placeholder_icon(BORDER, icon_size, "•")
 
 
-def get_video_cache_path(path):
-    safe_name = path.replace("\\", "_").replace("/", "_").replace(":", "_")
-    return str(THUMB_CACHE_DIR / (safe_name + "_thumb.jpg"))
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Video thumbnail helpers                                                      #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+def get_video_cache_path(path: str) -> str:
+    safe = path.replace("\\", "_").replace("/", "_").replace(":", "_")
+    return str(THUMB_CACHE_DIR / (safe + "_thumb.jpg"))
 
 
-def get_cached_video_icon(path, icon_size):
+def get_cached_video_icon(path, icon_size) -> QIcon | None:
     cache_path = get_video_cache_path(path)
     if Path(cache_path).exists():
         pixmap = QPixmap(cache_path)
         if not pixmap.isNull():
-            return QIcon(pixmap.scaled(
-                icon_size, icon_size,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            ))
+            return _letterbox_icon(pixmap, icon_size)
     return None
 
 
-def get_clapperboard_icon(icon_size):
+def get_clapperboard_icon(icon_size) -> QIcon:
+    w, h   = _wh(icon_size)
     pixmap = QPixmap(str(ICONS_DIR / "clapperboard.png"))
     if not pixmap.isNull():
-        return QIcon(pixmap.scaled(
-            icon_size, icon_size,
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        ))
+        return QIcon(pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
     return make_placeholder_icon("#1a1a2e", icon_size, "▶")

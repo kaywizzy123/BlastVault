@@ -95,15 +95,21 @@ QListWidget {{
     outline: none;
 }}
 QListWidget::item {{
-    border: none;
+    border: None;
     padding: 2px;
 }}
 QListWidget::item:hover {{
     background-color: {BORDER};
+    border: 2px solid {SPLITTER_COLOR};
+    border-radius: 5px;
+    padding: 5px;
 }}
 QListWidget::item:selected {{
     background-color: {ACCENT};
+    border: 2px solid {SPLITTER_COLOR};
     color: {TEXT_PRI};
+    border-radius: 5px;
+    padding: 5px;
 }}
 QScrollBar:vertical {{
     background-color: {BG};
