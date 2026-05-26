@@ -9,15 +9,14 @@
     "audio"
   ],
   "catalogs": [
-    "C:\\SHOWS\\SAM",
-    "C:\\SHOWS\\ATS"
+    "C:\\SHOWS\\SAM"
   ],
   "studio_name": "TEST ANIMATION STUDIOS",
   "root_dir": "C:/SHOWS",
   "departments": [
     "All",
     "Story",
-    "Concept Art",
+    "Visual Development",
     "Modeling",
     "Rigging",
     "Layout",
