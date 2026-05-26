@@ -47,11 +47,10 @@ class SettingsDialog(QDialog):
         self.studio_root_label = QLabel("Studio Root:")
         self.studio_root_lineEdit = QLineEdit()
         self.studio_root_lineEdit.setText(constants.ROOT_DIR)
-        self.studio_root_lineEdit.setReadOnly(True)
-        self.studio_root_lineEdit.setFocusPolicy(Qt.NoFocus)
+        self.studio_root_lineEdit.setPlaceholderText(r"e.g.  Z:\SHOWS  or  \\server\shows  or  /Volumes/server/shows")
         self.studio_root_lineEdit.setStyleSheet(f"""
             QLineEdit {{
-                background-color: {constants.SPLITTER_COLOR};
+                background-color: {constants.BORDER};
                 color: {constants.TEXT_PRI};
                 border: 1px solid {constants.BG};
                 border-radius: 4px;
