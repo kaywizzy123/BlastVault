@@ -1,6 +1,6 @@
 import sys
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QMenuBar, QSplitter, QAction
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QMenuBar, QSplitter
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
@@ -27,6 +27,8 @@ class MainWindow(QWidget):
 
     def create_widgets(self):
         self.menu_bar = QMenuBar()
+        self.menu_bar.setNativeMenuBar(False)   # force in-window menu on all platforms
+
         menu_menu = self.menu_bar.addMenu("Menu")
         self.add_catalog_action = menu_menu.addAction("Add Catalog")
         self.remove_catalog_action = menu_menu.addAction("Remove Catalog")
@@ -34,9 +36,6 @@ class MainWindow(QWidget):
         options_menu = self.menu_bar.addMenu("Options")
         self.settings_action = options_menu.addAction("Settings")
         self.about_action = options_menu.addAction("About")
-        # Prevent macOS from merging these into the system application menu
-        self.settings_action.setMenuRole(QAction.NoRole)
-        self.about_action.setMenuRole(QAction.NoRole)
 
         self.header_widget = HeaderWidget()
 
