@@ -4,7 +4,7 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 
-STUDIO_NAME = "NEON ANIMATION STUDIOS"
+STUDIO_NAME = "INDIE ANIMATION STUDIOS"
 ICONS_DIR = _ROOT / "icons"
 ICON = str(ICONS_DIR / "bv.png")
 CONFIG_PATH = _ROOT / "config.json"

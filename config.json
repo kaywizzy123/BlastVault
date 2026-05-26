@@ -8,11 +8,8 @@
     "fx",
     "audio"
   ],
-  "catalogs": [
-    "C:\\SHOWS\\SAM"
-  ],
   "studio_name": "TEST ANIMATION STUDIOS",
-  "root_dir": "C:/SHOWS",
+  "root_dir": "C:\\SHOWS",
   "departments": [
     "All",
     "Story",
@@ -26,5 +23,8 @@
     "FX / Simulation",
     "Lighting",
     "Matte Painting"
+  ],
+  "catalogs": [
+    "C:\\SHOWS\\SAM"
   ]
 }

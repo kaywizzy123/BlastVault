@@ -10,7 +10,7 @@ from core import constants
 from core.config import load_config
 from core.styles import styleSheet
 from widgets import LeftPanel, CenterPanel, RightPanel, HeaderWidget, FooterWidget
-from dialogs import SettingsDialog, AboutDialog
+from dialogs import SettingsDialog, AboutDialog, FirstRunDialog
 
 
 class MainWindow(QMainWindow):
@@ -21,11 +21,14 @@ class MainWindow(QMainWindow):
         QApplication.instance().setStyleSheet(styleSheet)
         self.setWindowIcon(QIcon(constants.ICON))
 
+        is_first_run = not constants.CONFIG_PATH.exists()
         saved_catalogs = load_config()
         self.create_widgets()
         self.create_layout()
         self.create_connections()
         self.left_panel.restore_catalogs(saved_catalogs)
+        if is_first_run:
+            FirstRunDialog(self).exec_()
 
     def create_widgets(self):
         # Use QMainWindow's built-in menuBar() — correctly integrated on every platform.
