@@ -1,8 +1,21 @@
-from tkinter import constants
+import sys
 
 from .constants import (
     BG, TEXT_PRI, TEXT_SEC, BORDER, ACCENT, ACCENT_HI, SPLITTER_COLOR
 )
+
+
+def qt_argv() -> list:
+    """Return sys.argv plus any platform-specific QApplication flags.
+
+    On Windows, appends ``-platform windows:darkmode=1`` so the app
+    follows the system dark-mode setting.  On macOS and Linux the flag
+    is omitted (those platforms handle dark mode differently).
+    """
+    args = sys.argv[:]
+    if sys.platform == "win32":
+        args += ["-platform", "windows:darkmode=1"]
+    return args
 
 styleSheet = f"""
 QWidget {{

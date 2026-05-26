@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import json
 import datetime
 import subprocess
@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImageReader
 
 from core import constants, styles
-from core.constants import detect_department, version_key
+from core.constants import detect_department, version_key, file_ctime
 from utils.collapsible_btn import CollapsibleWidget
 
 
@@ -138,7 +138,7 @@ class RightPanel(QWidget):
         self.artist_details.clear()
 
         try:
-            ctime = p.stat().st_birthtime
+            ctime = file_ctime(p)
             self.date_details.setText(
                 datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d  %H:%M:%S")
             )
@@ -186,7 +186,9 @@ class RightPanel(QWidget):
 
     def _read_video_metadata(self, path: str):
         """Populate resolution / length / frame fields via ffprobe."""
-        ffprobe = str(Path(constants.FFMPEG_PATH).parent / "ffprobe.exe")
+        import sys as _sys
+        _exe = "ffprobe.exe" if _sys.platform == "win32" else "ffprobe"
+        ffprobe = str(Path(constants.FFMPEG_PATH).parent / _exe)
         if not Path(ffprobe).exists():
             return
         try:
@@ -228,11 +230,12 @@ class RightPanel(QWidget):
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from PyQt5.QtWidgets import QApplication
-    from core.styles import styleSheet
-    app = QApplication(sys.argv + ["-platform", "windows:darkmode=1"])
+    from core.styles import styleSheet, qt_argv
+    app = QApplication(qt_argv())
     app.setStyle("Fusion")
     app.setStyleSheet(styleSheet)
     w = RightPanel()
     w.resize(300, 600)
     w.show()
     sys.exit(app.exec_())
+

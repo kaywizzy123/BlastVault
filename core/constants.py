@@ -1,15 +1,25 @@
 import re as _re
+import sys as _sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 
 STUDIO_NAME = "NEON ANIMATION STUDIOS"
-ROOT_DIR = r"C:\SHOWS"
 ICONS_DIR = _ROOT / "icons"
 ICON = str(ICONS_DIR / "bv.png")
 CONFIG_PATH = _ROOT / "config.json"
 THUMB_CACHE_DIR = _ROOT / "thumbnail_cache"
-FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
+
+# Platform-specific defaults — users override these in Settings.
+if _sys.platform == "win32":
+    ROOT_DIR    = r"C:\SHOWS"
+    FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
+elif _sys.platform == "darwin":
+    ROOT_DIR    = str(Path.home() / "Shows")
+    FFMPEG_PATH = "/opt/homebrew/bin/ffmpeg"   # Homebrew (Apple Silicon / Intel)
+else:                                           # Linux / other
+    ROOT_DIR    = str(Path.home() / "Shows")
+    FFMPEG_PATH = "/usr/bin/ffmpeg"
 
 GRID_ICON_W    = 180          # icon width  — wider to fill 16:9 video frames
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
@@ -112,6 +122,20 @@ def detect_department(filename: str) -> str:
         if kw in tokens:
             return dept
     return ""
+
+
+def file_ctime(p: Path) -> float:
+    """Return the best available creation/birth time for *p*.
+
+    * Windows / macOS — ``st_birthtime`` (true creation time).
+    * Linux           — ``st_mtime`` (modification time; Linux does not expose
+                         a creation timestamp through the standard stat API).
+    """
+    st = p.stat()
+    try:
+        return st.st_birthtime      # Windows, macOS
+    except AttributeError:
+        return st.st_mtime          # Linux fallback
 
 
 def canonical_stem(base: str) -> str:

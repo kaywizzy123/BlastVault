@@ -106,7 +106,10 @@ class MainWindow(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv + ['-platform', 'windows:darkmode=1'])
+    from core.styles import qt_argv
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+    app = QApplication(qt_argv())
     app.setStyle("Fusion")
     window = MainWindow()
     window.show()

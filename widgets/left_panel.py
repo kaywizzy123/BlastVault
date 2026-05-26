@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -196,9 +196,9 @@ class LeftPanel(QWidget):
 
 if __name__ == "__main__":
     from PyQt5.QtWidgets import QApplication
-    from core.styles import styleSheet
+    from core.styles import styleSheet, qt_argv
     from core.config import load_config
-    app = QApplication(sys.argv + ["-platform", "windows:darkmode=1"])
+    app = QApplication(qt_argv())
     app.setStyle("Fusion")
     app.setStyleSheet(styleSheet)
     w = LeftPanel()
@@ -206,3 +206,4 @@ if __name__ == "__main__":
     w.resize(320, 600)
     w.show()
     sys.exit(app.exec_())
+

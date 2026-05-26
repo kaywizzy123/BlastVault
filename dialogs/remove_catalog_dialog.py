@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -102,10 +102,10 @@ class RemoveCatalogDialog(QDialog):
 
 if __name__ == "__main__":
     from PyQt5.QtWidgets import QApplication, QTreeWidget, QTreeWidgetItem
-    from core.styles import styleSheet
+    from core.styles import styleSheet, qt_argv
     from core.constants import ACCENT
     from utils.icons import colored_icon
-    app = QApplication(sys.argv + ["-platform", "windows:darkmode=1"])
+    app = QApplication(qt_argv())
     app.setStyle("Fusion")
     app.setStyleSheet(styleSheet)
     tree = QTreeWidget()
@@ -115,3 +115,4 @@ if __name__ == "__main__":
     dlg = RemoveCatalogDialog(root, colored_icon(ACCENT, closed=True))
     dlg.exec_()
     sys.exit(0)
+

@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -244,10 +244,11 @@ class SettingsDialog(QDialog):
 
 if __name__ == "__main__":
     from PyQt5.QtWidgets import QApplication
-    from core.styles import styleSheet
-    app = QApplication(sys.argv + ["-platform", "windows:darkmode=1"])
+    from core.styles import styleSheet, qt_argv
+    app = QApplication(qt_argv())
     app.setStyle("Fusion")
     app.setStyleSheet(styleSheet)
     dlg = SettingsDialog()
     dlg.exec_()
     sys.exit(0)
+

@@ -231,7 +231,7 @@ class CenterPanel(QWidget):
                     if ext not in constants.ALLOWED_EXTS:
                         continue
                     try:
-                        ctime = p.stat().st_birthtime
+                        ctime = constants.file_ctime(p)
                     except OSError:
                         continue
 
@@ -480,8 +480,8 @@ class CenterPanel(QWidget):
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from PyQt5.QtWidgets import QApplication
-    from core.styles import styleSheet
-    app = QApplication(sys.argv + ["-platform", "windows:darkmode=1"])
+    from core.styles import styleSheet, qt_argv
+    app = QApplication(qt_argv())
     app.setStyle("Fusion")
     app.setStyleSheet(styleSheet)
     w = CenterPanel()
