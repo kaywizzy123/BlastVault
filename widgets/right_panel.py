@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from PyQt5.QtWidgets import QFormLayout, QWidget, QVBoxLayout, QLabel, QLineEdit, QTextEdit, QSizePolicy
+from PyQt5.QtWidgets import QFormLayout, QWidget, QVBoxLayout, QLabel, QLineEdit, QTextEdit
 from PyQt5.QtCore import Qt
 import datetime
 from core import constants, styles
@@ -76,17 +76,37 @@ class RightPanel(QWidget):
         self.resolution_details.setFocusPolicy(Qt.NoFocus)
         self.resolution_details.setStyleSheet(styles.input_style())
         self.resolution_details.setFixedHeight(25)
+        
+        self.length_label = QLabel("Length:")
+        self.length_details = QLineEdit()
+        self.length_details.setReadOnly(True)
+        self.length_details.setFocusPolicy(Qt.NoFocus)
+        self.length_details.setStyleSheet(styles.input_style())
+        self.length_details.setFixedHeight(25)
+        
+        self.frame_label = QLabel("Frames:")
+        self.frame_details = QLineEdit()
+        self.frame_details.setReadOnly(True)
+        self.frame_details.setFocusPolicy(Qt.NoFocus)
+        self.frame_details.setStyleSheet(styles.input_style())
+        self.frame_details.setFixedHeight(25)
+
+        self.file_details_widget = CollapsibleWidget("File Details")
+        self.file_details_widget.set_expanded(True)
 
         self.media_details_widget = CollapsibleWidget("Media Details")
         media_form = QFormLayout()
         media_form.setContentsMargins(10, 4, 10, 4)
         media_form.setSpacing(4)
         media_form.addRow(self.resolution_label, self.resolution_details)
+        media_form.addRow(self.length_label, self.length_details)
+        media_form.addRow(self.frame_label, self.frame_details)
         self.media_details_widget.add_layout(media_form)
+        
 
     def create_layout(self):
         info_layout = QFormLayout()
-        info_layout.setContentsMargins(10, 10, 10, 10)
+        info_layout.setContentsMargins(10, 4, 10, 4)
         info_layout.setSpacing(4)
         info_layout.addRow(self.file_label, self.file_details)
         info_layout.addRow(self.department_label, self.department_details)
@@ -95,15 +115,12 @@ class RightPanel(QWidget):
         info_layout.addRow(self.date_label, self.date_details)
         info_layout.addRow(self.description_label, self.description_details)
         info_layout.addRow(self.file_path_label, self.file_path_details)
-
-        info_container = QWidget()
-        info_container.setLayout(info_layout)
-        info_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.file_details_widget.add_layout(info_layout)
 
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setContentsMargins(4,4,4,4)
         self.main_layout.setSpacing(0)
-        self.main_layout.addWidget(info_container)
+        self.main_layout.addWidget(self.file_details_widget)
         self.main_layout.addWidget(self.media_details_widget)
         self.main_layout.addStretch()
 

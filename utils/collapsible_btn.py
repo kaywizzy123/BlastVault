@@ -81,7 +81,10 @@ class CollapsibleWidget(QWidget):
         self.header_wdg.clicked.connect(self.on_header_clicked)  # pylint: disable=E1101
         
         self.body_wdg = QtWidgets.QWidget()
-        
+        self.body_wdg.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed
+        )
+
         self.body_layout = QtWidgets.QVBoxLayout(self.body_wdg)
         self.body_layout.setContentsMargins(4, 2, 4, 2)
         self.body_layout.setSpacing(3)

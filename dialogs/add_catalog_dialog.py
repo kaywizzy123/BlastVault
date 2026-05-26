@@ -38,7 +38,7 @@ class AddCatalogDialog(QDialog):
         self.confirm_btn = QPushButton("Add Selected")
         self.confirm_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
@@ -52,14 +52,14 @@ class AddCatalogDialog(QDialog):
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.BORDER};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.FAIL};
             }}
         """)
 

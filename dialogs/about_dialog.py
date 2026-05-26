@@ -42,7 +42,7 @@ class AboutDialog(QDialog):
         self.close_button.setFixedWidth(100)
         self.close_button.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.BORDER};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;

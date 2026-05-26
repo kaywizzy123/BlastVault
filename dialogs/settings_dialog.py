@@ -6,7 +6,8 @@ from PyQt5.QtWidgets import (
     QDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView, QFileDialog
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtGui import QIcon
 
 from core import constants
 from core.config import save_config
@@ -61,18 +62,19 @@ class SettingsDialog(QDialog):
             }}
         """)
 
-        self.studio_root_browse_btn = QPushButton("Browse")
-        self.studio_root_browse_btn.setFixedWidth(70)
+        self.studio_root_browse_btn = QPushButton()
+        self.studio_root_browse_btn.setIcon(QIcon(os.path.join(constants.ICONS_DIR, "folder.png")))
+        self.studio_root_browse_btn.setIconSize(QSize(12, 12))
         self.studio_root_browse_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: {constants.ACCENT_HI};
+                background-color: {constants.BORDER};
             }}
         """)
 
@@ -104,32 +106,33 @@ class SettingsDialog(QDialog):
         self.pattern_input.setPlaceholderText("Enter pattern (e.g. _archive, backup*)")
         self.pattern_input.setStyleSheet(input_style())
 
-        self.add_btn = QPushButton("Add")
-        self.add_btn.setFixedWidth(80)
+        self.add_btn = QPushButton()
+        self.add_btn.setIcon(QIcon(os.path.join(constants.ICONS_DIR, "plus.png")))
+        self.add_btn.setIconSize(QSize(12, 12))
         self.add_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: {constants.ACCENT_HI};
+                background-color: {constants.BORDER};
             }}
         """)
 
         self.remove_btn = QPushButton("Remove Selected")
         self.remove_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.FAIL};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.FAIL};
             }}
         """)
 
@@ -137,7 +140,7 @@ class SettingsDialog(QDialog):
         self.save_btn.setFixedWidth(100)
         self.save_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
@@ -152,14 +155,14 @@ class SettingsDialog(QDialog):
         self.cancel_btn.setFixedWidth(100)
         self.cancel_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {constants.BORDER};
+                background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
                 border: none;
                 padding: 6px 12px;
                 border-radius: 5px;
             }}
             QPushButton:hover {{
-                background-color: {constants.ACCENT};
+                background-color: {constants.FAIL};
             }}
         """)
 
