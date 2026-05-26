@@ -1,6 +1,6 @@
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QMenu, QDialog
@@ -151,7 +151,7 @@ class LeftPanel(QWidget):
         save_config(catalog_paths=self.get_catalog_paths())
 
     def _add_catalog_item(self, path):
-        if not os.path.exists(path):
+        if not Path(path).exists():
             return
         root_item = QTreeWidgetItem(self.tree_widget, [QDir(path).dirName()])
         root_item.setData(0, Qt.UserRole, path)

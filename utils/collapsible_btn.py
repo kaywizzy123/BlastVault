@@ -1,9 +1,9 @@
 import sys
-import os
+from pathlib import Path
 
 from PyQt5 import QtCore
 from PyQt5 import QtWidgets
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton
@@ -22,10 +22,10 @@ class CollapsibleHeader(QWidget):
         super(CollapsibleHeader, self).__init__(parent)
 
         _icon_size = QtCore.QSize(12, 12)
-        self.COLLAPSED_PIXMAP = QtGui.QPixmap(os.path.join(ICONS_DIR, "right-arrow (2).png")).scaled(
+        self.COLLAPSED_PIXMAP = QtGui.QPixmap(str(ICONS_DIR / "right-arrow (2).png")).scaled(
             _icon_size, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
         )
-        self.EXPANDED_PIXMAP = QtGui.QPixmap(os.path.join(ICONS_DIR, "arrow-down-sign-to-navigate.png")).scaled(
+        self.EXPANDED_PIXMAP = QtGui.QPixmap(str(ICONS_DIR / "arrow-down-sign-to-navigate.png")).scaled(
             _icon_size, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
         )
 

@@ -15,7 +15,7 @@ class MainWindow(QWidget):
         super().__init__(parent)
         self.setWindowTitle("BlastVault")
         self.setMinimumSize(1920, 1080)
-        self.setStyleSheet(styleSheet)
+        QApplication.instance().setStyleSheet(styleSheet)
         self.setWindowIcon(QIcon(constants.ICON))
 
         saved_catalogs = load_config()
@@ -72,9 +72,11 @@ class MainWindow(QWidget):
         self.center_panel.folder_changed.connect(self.left_panel.sync_to_path)
         self.header_widget.toggle_view.connect(self.center_panel.toggle_view)
         self.header_widget.search_changed.connect(self.center_panel.filter_items)
+        self.header_widget.department_changed.connect(self.center_panel.filter_department)
         self.header_widget.refresh_btn.clicked.connect(self.on_refresh)
         self.center_panel.items_loaded.connect(self.footer.update_items)
         self.center_panel.selection_changed.connect(self.footer.update_selection)
+        self.center_panel.file_selected.connect(self.right_panel.display_metadata)
 
     def on_folder_selected(self, path):
         self.header_widget.search_bar.clear()

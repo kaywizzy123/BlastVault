@@ -1,6 +1,6 @@
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5.QtWidgets import (
     QDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
@@ -63,7 +63,7 @@ class SettingsDialog(QDialog):
         """)
 
         self.studio_root_browse_btn = QPushButton()
-        self.studio_root_browse_btn.setIcon(QIcon(os.path.join(constants.ICONS_DIR, "folder.png")))
+        self.studio_root_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
         self.studio_root_browse_btn.setIconSize(QSize(12, 12))
         self.studio_root_browse_btn.setStyleSheet(f"""
             QPushButton {{
@@ -107,7 +107,7 @@ class SettingsDialog(QDialog):
         self.pattern_input.setStyleSheet(input_style())
 
         self.add_btn = QPushButton()
-        self.add_btn.setIcon(QIcon(os.path.join(constants.ICONS_DIR, "plus.png")))
+        self.add_btn.setIcon(QIcon(str(constants.ICONS_DIR / "plus.png")))
         self.add_btn.setIconSize(QSize(12, 12))
         self.add_btn.setStyleSheet(f"""
             QPushButton {{

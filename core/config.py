@@ -1,13 +1,12 @@
-import os
 import json
 import fnmatch
 from . import constants
 
 
 def load_config():
-    if os.path.exists(constants.CONFIG_PATH):
+    if constants.CONFIG_PATH.exists():
         try:
-            with open(constants.CONFIG_PATH, "r") as f:
+            with constants.CONFIG_PATH.open("r") as f:
                 data = json.load(f)
                 constants.EXCLUDED_PATTERNS = data.get("excluded_patterns", [])
                 constants.STUDIO_NAME = data.get("studio_name", constants.STUDIO_NAME)
@@ -22,8 +21,8 @@ def load_config():
 def save_config(catalog_paths=None):
     try:
         existing = {}
-        if os.path.exists(constants.CONFIG_PATH):
-            with open(constants.CONFIG_PATH, "r") as f:
+        if constants.CONFIG_PATH.exists():
+            with constants.CONFIG_PATH.open("r") as f:
                 existing = json.load(f)
         existing["excluded_patterns"] = constants.EXCLUDED_PATTERNS
         existing["studio_name"] = constants.STUDIO_NAME
@@ -31,7 +30,7 @@ def save_config(catalog_paths=None):
         existing["departments"] = constants.DEPARTMENTS
         if catalog_paths is not None:
             existing["catalogs"] = catalog_paths
-        with open(constants.CONFIG_PATH, "w") as f:
+        with constants.CONFIG_PATH.open("w") as f:
             json.dump(existing, f, indent=2)
     except Exception:
         pass

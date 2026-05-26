@@ -1,12 +1,26 @@
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5.QtWidgets import QFormLayout, QWidget, QVBoxLayout, QLabel, QLineEdit, QTextEdit
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImageReader
+import re
+import json
 import datetime
+import subprocess
+from pathlib import Path
 from core import constants, styles
+from core.constants import detect_department
 from utils.collapsible_btn import CollapsibleWidget
+
+_VERSION_RE = re.compile(r'_v(\d+)$', re.IGNORECASE)
+
+def _version_key(stem):
+    m = _VERSION_RE.search(stem)
+    if m:
+        return stem[:m.start()], int(m.group(1))
+    return None, None
 
 
 
@@ -18,13 +32,13 @@ class RightPanel(QWidget):
         self.create_layout()
         self.create_connections()
         self.setContentsMargins(0, 0, 0, 0)
+        self.setStyleSheet(styles.input_style())
 
     def create_widgets(self):
         self.file_label = QLabel("File Name:")
         self.file_details = QLineEdit()
         self.file_details.setReadOnly(True)
         self.file_details.setFocusPolicy(Qt.NoFocus)
-        self.file_details.setStyleSheet(styles.input_style())
         self.file_details.setFixedHeight(25)
         
 
@@ -32,28 +46,24 @@ class RightPanel(QWidget):
         self.department_details = QLineEdit()
         self.department_details.setReadOnly(True)
         self.department_details.setFocusPolicy(Qt.NoFocus)
-        self.department_details.setStyleSheet(styles.input_style())
         self.department_details.setFixedHeight(25)
         
         self.artist_label = QLabel("Artist:")
         self.artist_details = QLineEdit()
         self.artist_details.setReadOnly(True)
         self.artist_details.setFocusPolicy(Qt.NoFocus)
-        self.artist_details.setStyleSheet(styles.input_style())
         self.artist_details.setFixedHeight(25)
 
         self.version_label = QLabel("Version:")
         self.version_details = QLineEdit()
         self.version_details.setReadOnly(True)
         self.version_details.setFocusPolicy(Qt.NoFocus)
-        self.version_details.setStyleSheet(styles.input_style())
         self.version_details.setFixedHeight(25)
 
         self.date_label = QLabel("Created:")
         self.date_details = QLineEdit()
         self.date_details.setReadOnly(True)
         self.date_details.setFocusPolicy(Qt.NoFocus)
-        self.date_details.setStyleSheet(styles.input_style())
         self.date_details.setFixedHeight(25)
 
         self.description_label = QLabel("Description:")
@@ -61,34 +71,29 @@ class RightPanel(QWidget):
         self.description_details.setReadOnly(True)
         self.description_details.setFocusPolicy(Qt.NoFocus)
         self.description_details.setFixedHeight(100)
-        self.description_details.setStyleSheet(styles.input_style())
         
         self.file_path_label = QLabel("File Path:")
         self.file_path_details = QLineEdit()
         self.file_path_details.setReadOnly(True)
         self.file_path_details.setFocusPolicy(Qt.NoFocus)
-        self.file_path_details.setStyleSheet(styles.input_style())
         self.file_path_details.setFixedHeight(25)
         
         self.resolution_label = QLabel("Resolution:")
         self.resolution_details = QLineEdit()
         self.resolution_details.setReadOnly(True)
         self.resolution_details.setFocusPolicy(Qt.NoFocus)
-        self.resolution_details.setStyleSheet(styles.input_style())
         self.resolution_details.setFixedHeight(25)
         
         self.length_label = QLabel("Length:")
         self.length_details = QLineEdit()
         self.length_details.setReadOnly(True)
         self.length_details.setFocusPolicy(Qt.NoFocus)
-        self.length_details.setStyleSheet(styles.input_style())
         self.length_details.setFixedHeight(25)
         
         self.frame_label = QLabel("Frames:")
         self.frame_details = QLineEdit()
         self.frame_details.setReadOnly(True)
         self.frame_details.setFocusPolicy(Qt.NoFocus)
-        self.frame_details.setStyleSheet(styles.input_style())
         self.frame_details.setFixedHeight(25)
 
         self.file_details_widget = CollapsibleWidget("File Details")
@@ -126,6 +131,117 @@ class RightPanel(QWidget):
 
     def create_connections(self):
         pass
+
+    # ------------------------------------------------------------------ #
+    #  Metadata display                                                    #
+    # ------------------------------------------------------------------ #
+
+    def display_metadata(self, path):
+        if not path:
+            self.clear_fields()
+            return
+
+        p = Path(path)
+        if not p.is_file():
+            self.clear_fields()
+            return
+
+        # File name (version stripped)
+        base, version = _version_key(p.stem)
+        self.file_details.setText(base if base is not None else p.stem)
+
+        # Version
+        self.version_details.setText(str(version) if version is not None else "")
+
+        # Full path
+        self.file_path_details.setText(str(p))
+
+        # Created date
+        try:
+            ctime = p.stat().st_ctime
+            self.date_details.setText(
+                datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d  %H:%M:%S")
+            )
+        except OSError:
+            self.date_details.clear()
+
+        # Department — detected from filename tokens
+        self.department_details.setText(detect_department(p.name))
+        self.artist_details.clear()
+
+        # Description — look for a sidecar .txt with the same stem
+        sidecar = p.with_suffix(".txt")
+        if sidecar.exists():
+            try:
+                self.description_details.setText(sidecar.read_text(encoding="utf-8"))
+            except Exception:
+                self.description_details.clear()
+        else:
+            self.description_details.clear()
+
+        # Media metadata
+        self.resolution_details.clear()
+        self.length_details.clear()
+        self.frame_details.clear()
+
+        ext = p.suffix.lower()
+        if ext in constants.IMAGE_EXTS:
+            reader = QImageReader(str(p))
+            size = reader.size()
+            if size.isValid():
+                self.resolution_details.setText(f"{size.width()} x {size.height()}")
+        elif ext in constants.VIDEO_EXTS:
+            self._read_video_metadata(str(p))
+
+    def _read_video_metadata(self, path):
+        ffprobe = str(Path(constants.FFMPEG_PATH).parent / "ffprobe.exe")
+        if not Path(ffprobe).exists():
+            return
+        try:
+            result = subprocess.run(
+                [ffprobe, "-v", "quiet", "-print_format", "json",
+                 "-show_streams", "-show_format", path],
+                capture_output=True, text=True, timeout=10
+            )
+            data = json.loads(result.stdout)
+        except Exception:
+            return
+
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") != "video":
+                continue
+
+            w, h = stream.get("width"), stream.get("height")
+            if w and h:
+                self.resolution_details.setText(f"{w} x {h}")
+
+            nb = stream.get("nb_frames", "")
+            if nb and nb != "N/A":
+                self.frame_details.setText(f"{nb} frames")
+
+            dur = stream.get("duration") or data.get("format", {}).get("duration")
+            if dur:
+                try:
+                    total = float(dur)
+                    ms = int(round((total % 1) * 1000))
+                    total_s = int(total)
+                    mins, s = divmod(total_s, 60)
+                    hrs, m = divmod(mins, 60)
+                    self.length_details.setText(
+                        f"{hrs:02d}:{m:02d}:{s:02d}:{ms:03d}"
+                    )
+                except ValueError:
+                    pass
+            break
+
+    def clear_fields(self):
+        for field in (
+            self.file_details, self.department_details, self.artist_details,
+            self.version_details, self.date_details, self.file_path_details,
+            self.resolution_details, self.length_details, self.frame_details,
+        ):
+            field.clear()
+        self.description_details.clear()
 
 
 if __name__ == "__main__":

@@ -198,7 +198,7 @@ def input_style():
     return f"""
         QLineEdit {{
             background-color: {BORDER};
-            color: {TEXT_PRI};
+            color: {TEXT_SEC};
             border: 1px solid {SPLITTER_COLOR};
             border-radius: 4px;
             padding: 4px 8px;
@@ -208,12 +208,15 @@ def input_style():
         }}
         QTextEdit {{
             background-color: {BORDER};
-            color: {TEXT_PRI};
+            color: {TEXT_SEC};
             border: 1px solid {SPLITTER_COLOR};
             border-radius: 4px;
             padding: 4px 8px;
         }}
         QTextEdit:focus {{
             border: 1px solid {ACCENT};
+        }}
+        QLabel {{
+            color: {TEXT_SEC}
         }}
     """

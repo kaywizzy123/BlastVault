@@ -1,6 +1,6 @@
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5.QtWidgets import (
     QDialog, QLineEdit, QListWidget, QListWidgetItem,
@@ -65,14 +65,14 @@ class AddCatalogDialog(QDialog):
 
     def populate_list(self, filter_text=""):
         self.list_widget.clear()
-        if not os.path.exists(constants.ROOT_DIR):
+        if not Path(constants.ROOT_DIR).exists():
             return
         try:
-            for entry in sorted(os.scandir(constants.ROOT_DIR), key=lambda e: e.name.lower()):
+            for entry in sorted(Path(constants.ROOT_DIR).iterdir(), key=lambda p: p.name.lower()):
                 if entry.is_dir() and not is_excluded(entry.name):
                     if filter_text.lower() in entry.name.lower():
                         item = QListWidgetItem(entry.name)
-                        item.setData(Qt.UserRole, entry.path)
+                        item.setData(Qt.UserRole, str(entry))
                         item.setCheckState(Qt.Unchecked)
                         item.setIcon(colored_icon(constants.ACCENT, closed=True))
                         self.list_widget.addItem(item)

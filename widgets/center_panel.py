@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QIcon
 
 from core import constants
+from core.constants import detect_department, canonical_stem
 from core.config import is_excluded
 from utils.icons import (
     colored_icon, make_placeholder_icon, get_file_icon,
@@ -31,6 +32,7 @@ class CenterPanel(QWidget):
     folder_changed = pyqtSignal(str)
     items_loaded = pyqtSignal(int)
     selection_changed = pyqtSignal(int)
+    file_selected = pyqtSignal(str)   # emits path when exactly one file is selected, else ""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -38,6 +40,9 @@ class CenterPanel(QWidget):
         self.current_path = None
         self.is_grid_view = True
         self.thumbnail_loader = None
+        self._text_filter = ""
+        self._dept_filter = "All"
+        self._asset_versions: dict = {}   # (canonical, ext) -> {dept: Path, '_overall': Path}
         self.create_widgets()
         self.create_layout()
         self.create_connections()
@@ -63,7 +68,12 @@ class CenterPanel(QWidget):
         self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
 
     def _on_selection_changed(self):
-        self.selection_changed.emit(len(self.list_widget.selectedItems()))
+        selected = self.list_widget.selectedItems()
+        self.selection_changed.emit(len(selected))
+        if len(selected) == 1 and not selected[0].data(Qt.UserRole + 1):
+            self.file_selected.emit(selected[0].data(Qt.UserRole))
+        else:
+            self.file_selected.emit("")
 
     def load_folder(self, path):
         self.current_path = path
@@ -83,9 +93,17 @@ class CenterPanel(QWidget):
             self._load_direct(folder, icon_size)
 
     def _load_latest_versions(self, folder, icon_size):
-        """Recursively show only the highest-version file per (base_stem, ext) group."""
-        latest = {}      # (base_stem, ext) -> (version, Path)
-        unversioned = [] # [Path]
+        """Recursively build one item per (canonical_stem, ext) asset group.
+
+        For each asset, the most recently created file per department is stored so that
+        the dept filter can swap to the right version rather than hiding the item.
+        If the selected department has no file for an asset, the overall most recent
+        file is shown as a fallback — the item is never hidden by the dept filter.
+        """
+        # (canonical, dept, ext) -> (ctime, Path) — best file per dept variant
+        by_dept: dict[tuple, tuple] = {}
+        # (canonical, ext)        -> (ctime, Path) — best file overall (fallback)
+        overall: dict[tuple, tuple] = {}
 
         try:
             for root, dirs, files in os.walk(folder):
@@ -98,26 +116,44 @@ class CenterPanel(QWidget):
                     ext = p.suffix.lower()
                     if ext not in constants.ALLOWED_EXTS:
                         continue
-                    base, version = _version_key(p.stem)
-                    if base is not None:
-                        key = (base, ext)
-                        if key not in latest or version > latest[key][0]:
-                            latest[key] = (version, p)
-                    else:
-                        unversioned.append(p)
+                    try:
+                        ctime = p.stat().st_ctime
+                    except OSError:
+                        continue
+                    base, _ = _version_key(p.stem)
+                    stem_for_key = base if base is not None else p.stem
+                    can  = canonical_stem(stem_for_key)
+                    dept = detect_department(p.name)
+
+                    dept_key = (can, dept, ext)
+                    if dept_key not in by_dept or ctime > by_dept[dept_key][0]:
+                        by_dept[dept_key] = (ctime, p)
+
+                    overall_key = (can, ext)
+                    if overall_key not in overall or ctime > overall[overall_key][0]:
+                        overall[overall_key] = (ctime, p)
         except PermissionError:
             pass
 
-        display_paths = [p for _, p in latest.values()] + unversioned
-        display_paths.sort(key=lambda p: p.name.lower())
+        # Build lookup: (canonical, ext) -> {dept: Path, '_overall': Path}
+        asset_versions: dict[tuple, dict] = {}
+        for (can, dept, ext), (_, p) in by_dept.items():
+            asset_versions.setdefault((can, ext), {})[dept] = p
+        for (can, ext), (_, p) in overall.items():
+            asset_versions.setdefault((can, ext), {})['_overall'] = p
+        self._asset_versions = asset_versions
 
+        # One item per asset, initially showing the overall most-recent file
+        display = sorted(overall.items(), key=lambda kv: kv[1][1].name.lower())
         thumbnail_paths = []
-        for p in display_paths:
-            ext = p.suffix.lower()
+        for (can, ext), (_, p) in display:
             base, _ = _version_key(p.stem)
-            item = QListWidgetItem(base if base is not None else p.stem)
-            item.setData(Qt.UserRole, str(p))
+            label = canonical_stem(base) if base is not None else p.stem
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole,     str(p))
             item.setData(Qt.UserRole + 1, False)
+            item.setData(Qt.UserRole + 2, detect_department(p.name))
+            item.setData(Qt.UserRole + 3, (can, ext))   # key into _asset_versions
             if ext in constants.IMAGE_EXTS:
                 item.setIcon(make_placeholder_icon(constants.BORDER, icon_size, "..."))
                 thumbnail_paths.append(str(p))
@@ -138,6 +174,7 @@ class CenterPanel(QWidget):
             self.thumbnail_loader.start()
 
         self.items_loaded.emit(self.list_widget.count())
+        self._apply_filters()
 
     def _load_direct(self, folder, icon_size):
         """Show immediate contents: subfolders then files."""
@@ -154,6 +191,7 @@ class CenterPanel(QWidget):
                 item = QListWidgetItem(p.name if p.is_dir() else p.stem)
                 item.setData(Qt.UserRole, str(p))
                 item.setData(Qt.UserRole + 1, p.is_dir())
+                item.setData(Qt.UserRole + 2, "" if p.is_dir() else detect_department(p.name))
 
                 if p.is_dir():
                     item.setIcon(colored_icon(constants.ACCENT, closed=True, size=icon_size))
@@ -179,6 +217,7 @@ class CenterPanel(QWidget):
             self.thumbnail_loader.start()
 
         self.items_loaded.emit(self.list_widget.count())
+        self._apply_filters()
 
     def on_thumbnail_ready(self, path, icon):
         for i in range(self.list_widget.count()):
@@ -194,9 +233,49 @@ class CenterPanel(QWidget):
             self.folder_changed.emit(path)
 
     def filter_items(self, text):
+        """Filter by search text (called by the search bar)."""
+        self._text_filter = text
+        self._apply_filters()
+
+    def filter_department(self, dept):
+        """Filter by department name, e.g. 'Animation'. Pass 'All' to show everything."""
+        self._dept_filter = dept
+        self._apply_filters()
+
+    def _apply_filters(self):
+        """Apply text and department filters.
+
+        SEQ items (UserRole+3 is set): dept filter swaps which file version is
+        displayed — the item is never hidden. If no file of the chosen department
+        exists for an asset, the overall most-recent file is shown as a fallback.
+
+        All other items: dept filter hides non-matching items as usual.
+        """
+        text = self._text_filter.lower()
+        dept = self._dept_filter
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
-            item.setHidden(text.lower() not in item.text().lower())
+            is_folder = bool(item.data(Qt.UserRole + 1))
+            name_match = (text in item.text().lower()) if text else True
+
+            asset_key = item.data(Qt.UserRole + 3)   # set only for SEQ items
+            if is_folder:
+                dept_match = True
+            elif asset_key is not None and asset_key in self._asset_versions:
+                # SEQ item: swap to the right dept version, never hide
+                versions = self._asset_versions[asset_key]
+                if dept in ("All", ""):
+                    target = versions.get('_overall')
+                else:
+                    target = versions.get(dept) or versions.get('_overall')
+                if target:
+                    item.setData(Qt.UserRole,     str(target))
+                    item.setData(Qt.UserRole + 2, detect_department(target.name))
+                dept_match = True
+            else:
+                # Regular (non-SEQ) item: hide if dept doesn't match
+                dept_match = dept in ("All", "") or item.data(Qt.UserRole + 2) == dept
+            item.setHidden(not (name_match and dept_match))
 
     def toggle_view(self):
         self.is_grid_view = not self.is_grid_view

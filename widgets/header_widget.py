@@ -1,8 +1,8 @@
 import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QFrame
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QIcon
 
@@ -14,6 +14,7 @@ from core.styles import header_btn_style
 class HeaderWidget(QWidget):
     toggle_view = pyqtSignal()
     search_changed = pyqtSignal(str)
+    department_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,7 +38,7 @@ class HeaderWidget(QWidget):
         self.department_filter_combobox = QComboBox()
         self.department_filter_combobox.setFixedWidth(150)
         self.department_filter_combobox.addItems(constants.DEPARTMENTS)
-        _arrow = os.path.join(ICONS_DIR, "arrow-down-sign-to-navigate.png").replace("\\", "/")
+        _arrow = str(ICONS_DIR / "arrow-down-sign-to-navigate.png").replace("\\", "/")
         _combo_style = f"""
             QComboBox {{
                 background-color: {constants.BG};
@@ -76,6 +77,9 @@ class HeaderWidget(QWidget):
         self.artist_filter_combobox.setFixedWidth(150)
         self.artist_filter_combobox.setStyleSheet(_combo_style)
 
+        for combo in (self.department_filter_combobox, self.artist_filter_combobox):
+            combo.view().setFrameShape(QFrame.NoFrame)
+
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search...")
         self.search_bar.setFixedWidth(500)
@@ -93,7 +97,7 @@ class HeaderWidget(QWidget):
         """)
 
         self.toggle_view_btn = QPushButton()
-        self.toggle_view_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "dashboards.png")))
+        self.toggle_view_btn.setIcon(QIcon(str(ICONS_DIR / "dashboards.png")))
         self.toggle_view_btn.setFixedSize(28, 28)
         self.toggle_view_btn.setIconSize(QSize(20, 20))
         self.toggle_view_btn.setCheckable(True)
@@ -101,7 +105,7 @@ class HeaderWidget(QWidget):
         self.toggle_view_btn.setStyleSheet(header_btn_style())
 
         self.refresh_btn = QPushButton()
-        self.refresh_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "refresh.png")))
+        self.refresh_btn.setIcon(QIcon(str(ICONS_DIR / "refresh.png")))
         self.refresh_btn.setFixedSize(28, 28)
         self.refresh_btn.setIconSize(QSize(20, 20))
         self.refresh_btn.setStyleSheet(header_btn_style())
@@ -132,12 +136,13 @@ class HeaderWidget(QWidget):
         self.toggle_view_btn.clicked.connect(self.on_toggle_view)
         self.refresh_btn.clicked.connect(self.on_refresh)
         self.search_bar.textChanged.connect(self.search_changed)
+        self.department_filter_combobox.currentTextChanged.connect(self.department_changed)
 
     def on_toggle_view(self):
         if self.toggle_view_btn.isChecked():
-            self.toggle_view_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "dashboards.png")))
+            self.toggle_view_btn.setIcon(QIcon(str(ICONS_DIR / "dashboards.png")))
         else:
-            self.toggle_view_btn.setIcon(QIcon(os.path.join(ICONS_DIR, "grid.png")))
+            self.toggle_view_btn.setIcon(QIcon(str(ICONS_DIR / "grid.png")))
         self.toggle_view.emit()
 
     def on_refresh(self):

@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
 
@@ -49,7 +49,7 @@ def make_placeholder_icon(color, size, symbol="?"):
 
 
 def get_file_icon(path, icon_size):
-    ext = os.path.splitext(path)[1].lower()
+    ext = Path(path).suffix.lower()
     if ext in IMAGE_EXTS:
         pixmap = QPixmap(path)
         if not pixmap.isNull():
@@ -67,12 +67,12 @@ def get_file_icon(path, icon_size):
 
 def get_video_cache_path(path):
     safe_name = path.replace("\\", "_").replace("/", "_").replace(":", "_")
-    return os.path.join(THUMB_CACHE_DIR, safe_name + "_thumb.jpg")
+    return str(THUMB_CACHE_DIR / (safe_name + "_thumb.jpg"))
 
 
 def get_cached_video_icon(path, icon_size):
     cache_path = get_video_cache_path(path)
-    if os.path.exists(cache_path):
+    if Path(cache_path).exists():
         pixmap = QPixmap(cache_path)
         if not pixmap.isNull():
             return QIcon(pixmap.scaled(
@@ -84,7 +84,7 @@ def get_cached_video_icon(path, icon_size):
 
 
 def get_clapperboard_icon(icon_size):
-    pixmap = QPixmap(os.path.join(ICONS_DIR, "clapperboard.png"))
+    pixmap = QPixmap(str(ICONS_DIR / "clapperboard.png"))
     if not pixmap.isNull():
         return QIcon(pixmap.scaled(
             icon_size, icon_size,

@@ -1,5 +1,5 @@
-import os
 import subprocess
+from pathlib import Path
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 
@@ -23,7 +23,7 @@ class ThumbnailLoader(QThread):
         for path in self.tasks:
             if not self._running:
                 break
-            ext = os.path.splitext(path)[1].lower()
+            ext = Path(path).suffix.lower()
             if ext in VIDEO_EXTS:
                 icon = self._load_video_thumbnail(path)
             else:
@@ -33,10 +33,10 @@ class ThumbnailLoader(QThread):
 
     def _load_video_thumbnail(self, path):
         try:
-            os.makedirs(THUMB_CACHE_DIR, exist_ok=True)
+            THUMB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_path = get_video_cache_path(path)
 
-            if not os.path.exists(cache_path):
+            if not Path(cache_path).exists():
                 result = subprocess.run(
                     [
                         FFMPEG_PATH, "-y",
@@ -52,7 +52,7 @@ class ThumbnailLoader(QThread):
                 if result.returncode != 0:
                     return None
 
-            if os.path.exists(cache_path):
+            if Path(cache_path).exists():
                 pixmap = QPixmap(cache_path)
                 if not pixmap.isNull():
                     return QIcon(pixmap.scaled(
