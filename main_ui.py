@@ -1,6 +1,8 @@
 import sys
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QMenuBar, QSplitter
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QMenuBar, QSplitter,
+)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
@@ -11,7 +13,7 @@ from widgets import LeftPanel, CenterPanel, RightPanel, HeaderWidget, FooterWidg
 from dialogs import SettingsDialog, AboutDialog
 
 
-class MainWindow(QWidget):
+class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("BlastVault")
@@ -27,7 +29,7 @@ class MainWindow(QWidget):
 
     def create_widgets(self):
         self.menu_bar = QMenuBar()
-        self.menu_bar.setNativeMenuBar(False)   # force in-window menu on all platforms
+        self.menu_bar.setNativeMenuBar(False)   # consistent in-window menu on all platforms
 
         menu_menu = self.menu_bar.addMenu("Menu")
         self.add_catalog_action = menu_menu.addAction("Add Catalog")
@@ -58,13 +60,17 @@ class MainWindow(QWidget):
         self.footer = FooterWidget()
 
     def create_layout(self):
-        main_layout = QVBoxLayout(self)
-        main_layout.setMenuBar(self.menu_bar)
+        # QMainWindow requires a central widget; the menu bar is set separately.
+        self.setMenuBar(self.menu_bar)
+
+        central = QWidget()
+        main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         main_layout.addWidget(self.header_widget)
         main_layout.addWidget(self.splitter)
         main_layout.addWidget(self.footer)
+        self.setCentralWidget(central)
 
     def create_connections(self):
         self.about_action.triggered.connect(self.show_about)
