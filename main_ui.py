@@ -1,7 +1,7 @@
 import sys
 
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QMenuBar, QSplitter,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QSplitter, QAction,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -28,23 +28,29 @@ class MainWindow(QMainWindow):
         self.left_panel.restore_catalogs(saved_catalogs)
 
     def create_widgets(self):
-        self.menu_bar = QMenuBar()
-        self.menu_bar.setNativeMenuBar(False)   # consistent in-window menu on all platforms
+        # Use QMainWindow's built-in menuBar() — correctly integrated on every platform.
+        # Roles must be set before the window is shown so macOS processes them on startup.
+        mb = self.menuBar()
 
-        menu_menu = self.menu_bar.addMenu("Menu")
+        menu_menu = mb.addMenu("Menu")
         self.add_catalog_action = menu_menu.addAction("Add Catalog")
         self.remove_catalog_action = menu_menu.addAction("Remove Catalog")
 
-        options_menu = self.menu_bar.addMenu("Options")
+        options_menu = mb.addMenu("Options")
         self.settings_action = options_menu.addAction("Settings")
-        self.about_action = options_menu.addAction("About")
+        self.about_action    = options_menu.addAction("About")
+
+        # NoRole: keep these items exactly where they are — stops macOS from
+        # pulling them into the application menu and emptying the Options menu.
+        self.settings_action.setMenuRole(QAction.NoRole)
+        self.about_action.setMenuRole(QAction.NoRole)
 
         self.header_widget = HeaderWidget()
 
         self.splitter = QSplitter(Qt.Horizontal)
-        self.left_panel = LeftPanel()
+        self.left_panel   = LeftPanel()
         self.center_panel = CenterPanel()
-        self.right_panel = RightPanel()
+        self.right_panel  = RightPanel()
 
         self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.center_panel)
@@ -60,9 +66,6 @@ class MainWindow(QMainWindow):
         self.footer = FooterWidget()
 
     def create_layout(self):
-        # QMainWindow requires a central widget; the menu bar is set separately.
-        self.setMenuBar(self.menu_bar)
-
         central = QWidget()
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
