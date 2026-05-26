@@ -1,5 +1,6 @@
 import re as _re
 import sys as _sys
+import shutil as _shutil
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -12,14 +13,40 @@ THUMB_CACHE_DIR = _ROOT / "thumbnail_cache"
 
 # Platform-specific defaults — users override these in Settings.
 if _sys.platform == "win32":
-    ROOT_DIR    = r"C:\SHOWS"
-    FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
+    ROOT_DIR = r"C:\SHOWS"
+    _FFMPEG_CANDIDATES = [
+        r"C:\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+    ]
 elif _sys.platform == "darwin":
-    ROOT_DIR    = str(Path.home() / "Shows")
-    FFMPEG_PATH = "/opt/homebrew/bin/ffmpeg"   # Homebrew (Apple Silicon / Intel)
-else:                                           # Linux / other
-    ROOT_DIR    = str(Path.home() / "Shows")
-    FFMPEG_PATH = "/usr/bin/ffmpeg"
+    ROOT_DIR = str(Path.home() / "Shows")
+    _FFMPEG_CANDIDATES = [
+        "/opt/homebrew/bin/ffmpeg",   # Homebrew Apple Silicon
+        "/usr/local/bin/ffmpeg",      # Homebrew Intel / manual
+        "/opt/local/bin/ffmpeg",      # MacPorts
+    ]
+else:                                 # Linux / other
+    ROOT_DIR = str(Path.home() / "Shows")
+    _FFMPEG_CANDIDATES = [
+        "/usr/bin/ffmpeg",            # apt / yum package
+        "/usr/local/bin/ffmpeg",      # compiled from source
+        "/snap/bin/ffmpeg",           # snap package
+    ]
+
+def _find_ffmpeg() -> str:
+    """Return the ffmpeg binary path, checking PATH first then known locations."""
+    # 1. Whatever is on the system PATH (conda envs, custom installs, etc.)
+    found = _shutil.which("ffmpeg")
+    if found:
+        return found
+    # 2. Known platform-specific locations
+    for candidate in _FFMPEG_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+    # 3. Last resort: return first candidate — thumbnail_loader checks existence
+    return _FFMPEG_CANDIDATES[0]
+
+FFMPEG_PATH = _find_ffmpeg()
 
 GRID_ICON_W    = 180          # icon width  — wider to fill 16:9 video frames
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)

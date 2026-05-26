@@ -3,8 +3,10 @@ from pathlib import Path
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 
-from core.constants import THUMB_CACHE_DIR, FFMPEG_PATH, VIDEO_EXTS
-from utils.icons import get_file_icon, get_video_cache_path, _letterbox_icon
+from core import constants
+from utils.icons import (
+    get_file_icon, get_video_cache_path, _letterbox_icon, get_clapperboard_icon,
+)
 
 
 class ThumbnailLoader(QThread):
@@ -24,33 +26,37 @@ class ThumbnailLoader(QThread):
             if not self._running:
                 break
             ext = Path(path).suffix.lower()
-            if ext in VIDEO_EXTS:
+            if ext in constants.VIDEO_EXTS:
                 icon = self._load_video_thumbnail(path)
             else:
                 icon = get_file_icon(path, self.icon_size)
             if icon:
                 self.thumbnail_ready.emit(path, icon)
 
-    def _load_video_thumbnail(self, path):
+    def _load_video_thumbnail(self, path: str) -> QIcon:
+        ffmpeg = Path(constants.FFMPEG_PATH)   # read live — respects Settings changes
+        if not ffmpeg.exists():
+            return get_clapperboard_icon(self.icon_size)
+
         try:
-            THUMB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            constants.THUMB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_path = get_video_cache_path(path)
 
             if not Path(cache_path).exists():
                 result = subprocess.run(
                     [
-                        FFMPEG_PATH, "-y",
+                        str(ffmpeg), "-y",
                         "-i", path,
                         "-vframes", "1",
                         "-q:v", "2",
-                        cache_path
+                        cache_path,
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    timeout=15
+                    timeout=15,
                 )
                 if result.returncode != 0:
-                    return None
+                    return get_clapperboard_icon(self.icon_size)
 
             if Path(cache_path).exists():
                 pixmap = QPixmap(cache_path)
@@ -58,4 +64,5 @@ class ThumbnailLoader(QThread):
                     return _letterbox_icon(pixmap, self.icon_size)
         except Exception as e:
             print(f"Video thumbnail error for {path}: {e}")
-        return None
+
+        return get_clapperboard_icon(self.icon_size)
