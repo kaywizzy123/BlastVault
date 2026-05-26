@@ -15,7 +15,7 @@ class MainWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("BlastVault")
-        self.setMinimumSize(1920, 1080)
+        self.setMinimumSize(900, 600)
         QApplication.instance().setStyleSheet(styleSheet)
         self.setWindowIcon(QIcon(constants.ICON))
 
@@ -112,5 +112,5 @@ if __name__ == "__main__":
     app = QApplication(qt_argv())
     app.setStyle("Fusion")
     window = MainWindow()
-    window.show()
+    window.showMaximized()
     sys.exit(app.exec_())
