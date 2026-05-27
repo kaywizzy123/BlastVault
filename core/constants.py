@@ -8,8 +8,36 @@ _ROOT = Path(__file__).resolve().parent.parent
 STUDIO_NAME = "INDIE ANIMATION STUDIOS"
 ICONS_DIR = _ROOT / "icons"
 ICON = str(ICONS_DIR / "bv.png")
-CONFIG_PATH = _ROOT / "config.json"
-THUMB_CACHE_DIR = _ROOT / "thumbnail_cache"
+
+# ---------------------------------------------------------------------------
+# User-data paths
+#   Dev  (running from source)  →  project folder, easy to inspect/reset
+#   Prod (packaged by PyInstaller) →  per-user OS directory, always writable
+# ---------------------------------------------------------------------------
+_IS_FROZEN = getattr(_sys, "frozen", False)
+
+if _IS_FROZEN:
+    # Installed / packaged — use the proper OS user-data location
+    if _sys.platform == "win32":
+        _APP_DATA  = Path.home() / "AppData" / "Roaming" / "BlastVault"
+        _CACHE_DIR = _APP_DATA / "thumbnail_cache"
+    elif _sys.platform == "darwin":
+        _APP_DATA  = Path.home() / "Library" / "Application Support" / "BlastVault"
+        _CACHE_DIR = Path.home() / "Library" / "Caches" / "BlastVault" / "thumbnail_cache"
+    else:                               # Linux / other
+        _APP_DATA  = Path.home() / ".config" / "BlastVault"
+        _CACHE_DIR = Path.home() / ".cache"  / "BlastVault" / "thumbnail_cache"
+else:
+    # Development — keep everything inside the project folder
+    _APP_DATA  = _ROOT
+    _CACHE_DIR = _ROOT / "thumbnail_cache"
+
+CONFIG_PATH     = _APP_DATA  / "config.json"
+THUMB_CACHE_DIR = _CACHE_DIR
+
+# Ensure both directories exist at import time so nothing else needs to mkdir.
+_APP_DATA.mkdir(parents=True, exist_ok=True)
+_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Platform-specific defaults — users override these in Settings.
 if _sys.platform == "win32":
