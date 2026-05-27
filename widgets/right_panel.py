@@ -29,6 +29,15 @@ def _readonly_field(height: int = 25) -> QLineEdit:
     return field
 
 
+def _fmt_size(n: int) -> str:
+    """Return a human-readable file size string (e.g. '3.2 MB')."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
 # ──────────────────────────────────────────────────────────────────────────── #
 #  RightPanel                                                                   #
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -53,6 +62,7 @@ class RightPanel(QWidget):
         self.artist_details     = _readonly_field()
         self.version_details    = _readonly_field()
         self.date_details       = _readonly_field()
+        self.file_size_details  = _readonly_field()
         self.file_path_details  = _readonly_field()
 
         self.description_details = QTextEdit()
@@ -81,6 +91,7 @@ class RightPanel(QWidget):
             ("Artist:",      self.artist_details),
             ("Version:",     self.version_details),
             ("Created:",     self.date_details),
+            ("File Size:",   self.file_size_details),
             ("Description:", self.description_details),
             ("File Path:",   self.file_path_details),
         ):
@@ -145,6 +156,11 @@ class RightPanel(QWidget):
         except OSError:
             self.date_details.clear()
 
+        try:
+            self.file_size_details.setText(_fmt_size(p.stat().st_size))
+        except OSError:
+            self.file_size_details.clear()
+
         sidecar = p.with_suffix(".txt")
         if sidecar.exists():
             try:
@@ -177,8 +193,9 @@ class RightPanel(QWidget):
         """Clear all fields and hide the content panel."""
         for field in (
             self.file_details, self.department_details, self.artist_details,
-            self.version_details, self.date_details, self.file_path_details,
-            self.resolution_details, self.length_details, self.frame_details,
+            self.version_details, self.date_details, self.file_size_details,
+            self.file_path_details, self.resolution_details,
+            self.length_details, self.frame_details,
         ):
             field.clear()
         self.description_details.clear()

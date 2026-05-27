@@ -5,10 +5,10 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QListWidget, QListWidgetItem,
-    QAbstractItemView, QLabel, QApplication, QMenu,
+    QAbstractItemView, QLabel, QApplication, QMenu, QStackedWidget,
 )
-from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher
-from PyQt5.QtGui import QIcon, QPixmap, QCursor
+from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher, QMimeData, QUrl
+from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag
 
 from core import constants
 from core.constants import detect_department, canonical_stem, version_key
@@ -22,6 +22,39 @@ from widgets.thumbnail_loader import ThumbnailLoader
 
 # Maximum side length (px) of the hover-preview popup image.
 _PREVIEW_SIZE = 400
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Drag-enabled list widget                                                     #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+class FileListWidget(QListWidget):
+    """QListWidget that emits proper file-URL MIME data when dragged, so
+    external apps (Maya, Nuke, Photoshop, Finder, Explorer …) can receive
+    the files directly."""
+
+    def startDrag(self, _supported_actions):
+        items = self.selectedItems()
+        # Only drag files — skip folders
+        file_items = [it for it in items if not it.data(Qt.UserRole + 1)]
+        if not file_items:
+            return
+
+        urls = [QUrl.fromLocalFile(it.data(Qt.UserRole)) for it in file_items]
+        mime = QMimeData()
+        mime.setUrls(urls)
+
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+
+        # Use the item thumbnail as the drag pixmap for single-file drags
+        if len(file_items) == 1:
+            pix = file_items[0].icon().pixmap(64, 64)
+            if not pix.isNull():
+                drag.setPixmap(pix)
+                drag.setHotSpot(pix.rect().center())
+
+        drag.exec_(Qt.CopyAction)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -102,7 +135,7 @@ class CenterPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def create_widgets(self):
-        self.list_widget = QListWidget()
+        self.list_widget = FileListWidget()
         self.list_widget.setViewMode(QListWidget.IconMode)
         self.list_widget.setIconSize(QSize(constants.GRID_ICON_W, constants.GRID_ICON_H))
         self.list_widget.setGridSize(QSize(*constants.GRID_CELL_SIZE))
@@ -110,6 +143,21 @@ class CenterPanel(QWidget):
         self.list_widget.setSpacing(2)
         self.list_widget.setResizeMode(QListWidget.Adjust)
         self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_widget.setDragEnabled(True)
+        self.list_widget.setDragDropMode(QAbstractItemView.DragOnly)
+
+        # ── Loading indicator ────────────────────────────────────────────
+        self._loading_label = QLabel("Loading")
+        self._loading_label.setAlignment(Qt.AlignCenter)
+        self._loading_label.setStyleSheet(f"""
+            color: {constants.TEXT_SEC};
+            font-size: 14px;
+            background: transparent;
+        """)
+        self._dot_count = 0
+        self._loading_timer = QTimer(self)
+        self._loading_timer.setInterval(400)
+        self._loading_timer.timeout.connect(self._animate_loading)
 
         # Hover-preview timers and popup
         self._preview_popup   = ThumbnailPreviewPopup()
@@ -133,10 +181,22 @@ class CenterPanel(QWidget):
         self.list_widget.viewport().installEventFilter(self)
 
     def create_layout(self):
+        # Loading page — centred label shown while folder is being read
+        loading_page = QWidget()
+        lp_layout = QVBoxLayout(loading_page)
+        lp_layout.addStretch()
+        lp_layout.addWidget(self._loading_label)
+        lp_layout.addStretch()
+
+        self._stack = QStackedWidget()
+        self._stack.addWidget(loading_page)      # index 0 — loading
+        self._stack.addWidget(self.list_widget)  # index 1 — content
+        self._stack.setCurrentIndex(1)
+
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(2, 2, 2, 2)
         self.main_layout.setSpacing(0)
-        self.main_layout.addWidget(self.list_widget)
+        self.main_layout.addWidget(self._stack)
 
     def create_connections(self):
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
@@ -158,6 +218,9 @@ class CenterPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def load_folder(self, path: str):
+        self._show_loading()
+        QApplication.processEvents()   # let Qt render the indicator before blocking
+
         self.current_path = path
         self._reset_hover()
         self.list_widget.clear()
@@ -274,6 +337,7 @@ class CenterPanel(QWidget):
             self.list_widget.addItem(item)
 
         self._start_thumbnail_loader(thumbnail_paths, icon_size)
+        self._hide_loading()
         self.items_loaded.emit(self.list_widget.count())
         self._apply_filters()
 
@@ -302,6 +366,7 @@ class CenterPanel(QWidget):
             pass
 
         self._start_thumbnail_loader(thumbnail_paths, icon_size)
+        self._hide_loading()
         self.items_loaded.emit(self.list_widget.count())
         self._apply_filters()
 
@@ -486,6 +551,24 @@ class CenterPanel(QWidget):
         pos = sb.value()
         self.load_folder(self.current_path)
         sb.setValue(pos)
+
+    # ------------------------------------------------------------------ #
+    #  Loading indicator                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _show_loading(self):
+        self._dot_count = 0
+        self._loading_label.setText("Loading")
+        self._stack.setCurrentIndex(0)
+        self._loading_timer.start()
+
+    def _hide_loading(self):
+        self._loading_timer.stop()
+        self._stack.setCurrentIndex(1)
+
+    def _animate_loading(self):
+        self._dot_count = (self._dot_count + 1) % 4
+        self._loading_label.setText("Loading" + " ." * self._dot_count)
 
     # ------------------------------------------------------------------ #
     #  Keyboard navigation                                                 #
