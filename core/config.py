@@ -17,10 +17,7 @@ def load_config():
             constants.DEPARTMENTS       = data.get("departments",  constants.DEPARTMENTS)
             constants.ARTISTS           = data.get("artists",      constants.ARTISTS)
 
-            # Tools — only override if the key is present so platform defaults
-            # are kept on first run
-            if "ffmpeg_path" in data:
-                constants.FFMPEG_PATH = data["ffmpeg_path"]
+            # Tools
             if "blast_player_path" in data:
                 constants.BLAST_PLAYER_PATH = Path(data["blast_player_path"])
 
@@ -53,8 +50,10 @@ def save_config(catalog_paths=None):
         existing["root_dir"]          = constants.ROOT_DIR
         existing["departments"]       = constants.DEPARTMENTS
         existing["artists"]           = constants.ARTISTS
-        existing["ffmpeg_path"]       = constants.FFMPEG_PATH
         existing["blast_player_path"] = str(constants.BLAST_PLAYER_PATH)
+        # ffmpeg_path is intentionally NOT saved — it is auto-detected at
+        # startup via shutil.which so it always reflects the current machine.
+        existing.pop("ffmpeg_path", None)   # clean up any legacy value
 
         # Window geometry — only write when we have real values
         if constants.WINDOW_GEOMETRY:

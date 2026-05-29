@@ -25,13 +25,16 @@ class ThumbnailLoader(QThread):
         for path in self.tasks:
             if not self._running:
                 break
-            ext = Path(path).suffix.lower()
-            if ext in constants.VIDEO_EXTS:
-                icon = self._load_video_thumbnail(path)
-            else:
-                icon = get_file_icon(path, self.icon_size)
-            if icon:
-                self.thumbnail_ready.emit(path, icon)
+            try:
+                ext = Path(path).suffix.lower()
+                if ext in constants.VIDEO_EXTS:
+                    icon = self._load_video_thumbnail(path)
+                else:
+                    icon = get_file_icon(path, self.icon_size)
+                if icon:
+                    self.thumbnail_ready.emit(path, icon)
+            except Exception as e:
+                print(f"[ThumbnailLoader] skipped {path}: {e}")
 
     def _load_video_thumbnail(self, path: str) -> QIcon:
         ffmpeg = Path(constants.FFMPEG_PATH)   # read live — respects Settings changes

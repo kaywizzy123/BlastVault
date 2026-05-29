@@ -168,24 +168,28 @@ class SettingsDialog(QDialog):
         self.ffmpeg_section_label.setStyleSheet(self._section_style())
 
         self.ffmpeg_hint_label = QLabel(
-            "Required for video thumbnail extraction and audio playback."
+            "Required for video thumbnail extraction.\n"
+            "FFmpeg is located automatically via PATH and common install locations.\n"
+            "To change the version, update your system PATH."
         )
         self.ffmpeg_hint_label.setStyleSheet(self._hint_style())
 
-        self.ffmpeg_path_edit = QLineEdit()
-        self.ffmpeg_path_edit.setText(constants.FFMPEG_PATH)
-        self.ffmpeg_path_edit.setStyleSheet(self._input_style())
-
-        self.ffmpeg_browse_btn = QPushButton()
-        self.ffmpeg_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
-        self.ffmpeg_browse_btn.setIconSize(QSize(12, 12))
-        self.ffmpeg_browse_btn.setToolTip("Browse for ffmpeg executable")
-        self.ffmpeg_browse_btn.setStyleSheet(self._btn_style())
+        # Show the currently detected path (read-only)
+        detected = constants.FFMPEG_PATH or "Not found"
+        prefix   = "Detected:" if constants.FFMPEG_PATH else "⚠  Not found —"
+        suffix   = "" if constants.FFMPEG_PATH else " install ffmpeg and add it to PATH"
+        self.ffmpeg_detected_lbl = QLabel(f"{prefix}  {detected}{suffix}")
+        self.ffmpeg_detected_lbl.setStyleSheet(
+            f"background: transparent; font-size: 11px; "
+            f"color: {constants.TEXT_SEC if constants.FFMPEG_PATH else constants.FAIL};"
+        )
+        self.ffmpeg_detected_lbl.setWordWrap(True)
 
         self.ffmpeg_test_btn = QPushButton("Test")
         self.ffmpeg_test_btn.setFixedWidth(54)
         self.ffmpeg_test_btn.setToolTip("Run ffmpeg -version to verify")
         self.ffmpeg_test_btn.setStyleSheet(self._btn_style())
+        self.ffmpeg_test_btn.setEnabled(bool(constants.FFMPEG_PATH))
 
         self.ffmpeg_status_lbl = QLabel("")
         self.ffmpeg_status_lbl.setStyleSheet(
@@ -323,12 +327,12 @@ class SettingsDialog(QDialog):
 
         tools.addWidget(self.ffmpeg_section_label)
         tools.addWidget(self.ffmpeg_hint_label)
+        tools.addWidget(self.ffmpeg_detected_lbl)
 
-        ffmpeg_row = QHBoxLayout()
-        ffmpeg_row.addWidget(self.ffmpeg_path_edit)
-        ffmpeg_row.addWidget(self.ffmpeg_browse_btn)
-        ffmpeg_row.addWidget(self.ffmpeg_test_btn)
-        tools.addLayout(ffmpeg_row)
+        ffmpeg_test_row = QHBoxLayout()
+        ffmpeg_test_row.addWidget(self.ffmpeg_test_btn)
+        ffmpeg_test_row.addStretch()
+        tools.addLayout(ffmpeg_test_row)
         tools.addWidget(self.ffmpeg_status_lbl)
 
         sep = QFrame()
@@ -415,7 +419,6 @@ class SettingsDialog(QDialog):
         self.artist_input.returnPressed.connect(self._on_artist_add)
 
         # Tools
-        self.ffmpeg_browse_btn.clicked.connect(self._on_browse_ffmpeg)
         self.ffmpeg_test_btn.clicked.connect(self._on_test_ffmpeg)
         self.player_browse_btn.clicked.connect(self._on_browse_player)
 
@@ -528,19 +531,10 @@ class SettingsDialog(QDialog):
     #  Tools tab slots                                                     #
     # ------------------------------------------------------------------ #
 
-    def _on_browse_ffmpeg(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select FFmpeg executable",
-            str(Path(constants.FFMPEG_PATH).parent),
-        )
-        if path:
-            self.ffmpeg_path_edit.setText(path)
-            self.ffmpeg_status_lbl.setText("")
-
     def _on_test_ffmpeg(self):
-        path = self.ffmpeg_path_edit.text().strip()
+        path = constants.FFMPEG_PATH
         if not path or not Path(path).is_file():
-            self._set_ffmpeg_status("Not found at this path.", ok=False)
+            self._set_ffmpeg_status("FFmpeg not found — install it and add to PATH.", ok=False)
             return
         try:
             result = subprocess.run(
@@ -557,7 +551,7 @@ class SettingsDialog(QDialog):
         except FileNotFoundError:
             self._set_ffmpeg_status("Executable not found.", ok=False)
         except subprocess.TimeoutExpired:
-            self._set_ffmpeg_status("Timed out — check the path.", ok=False)
+            self._set_ffmpeg_status("Timed out.", ok=False)
         except Exception as e:
             self._set_ffmpeg_status(str(e), ok=False)
 
@@ -613,7 +607,6 @@ class SettingsDialog(QDialog):
             self._populate_artist_list()
             self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
             self.studio_root_lineEdit.setText(constants.ROOT_DIR)
-            self.ffmpeg_path_edit.setText(constants.FFMPEG_PATH)
             self.player_path_edit.setText(str(constants.BLAST_PLAYER_PATH))
             self.ffmpeg_status_lbl.setText("")
             self.settings_changed.emit()
@@ -652,10 +645,6 @@ class SettingsDialog(QDialog):
         ]
 
         # Tools
-        ffmpeg = self.ffmpeg_path_edit.text().strip()
-        if ffmpeg:
-            constants.FFMPEG_PATH = ffmpeg
-
         player = self.player_path_edit.text().strip()
         if player:
             constants.BLAST_PLAYER_PATH = Path(player)

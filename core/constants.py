@@ -1,4 +1,5 @@
 import re as _re
+import shutil as _shutil
 import sys as _sys
 from pathlib import Path
 
@@ -38,21 +39,33 @@ THUMB_CACHE_DIR = _CACHE_DIR
 _APP_DATA.mkdir(parents=True, exist_ok=True)
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Platform-specific defaults — users override these in Settings.
+# Platform-specific defaults
 if _sys.platform == "win32":
-    ROOT_DIR    = r"C:\SHOWS"
-    FFMPEG_PATH = r"C:\ffmpeg\bin\ffmpeg.exe"
+    ROOT_DIR = r"C:\SHOWS"
+else:
+    ROOT_DIR = str(Path.home() / "Shows")
+
+# FFMPEG_PATH — auto-detected at startup; never saved to / restored from config.
+# Resolution order:
+#   1. PATH  (shutil.which)  — covers Homebrew, conda, apt, winget, etc.
+#   2. Common hard-coded locations — safety net for out-of-PATH installs
+if _sys.platform == "win32":
+    _FFMPEG_FALLBACKS = [
+        r"C:\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+    ]
 elif _sys.platform == "darwin":
-    ROOT_DIR    = str(Path.home() / "Shows")
-    # Homebrew Apple Silicon → /opt/homebrew, Intel/manual → /usr/local
-    FFMPEG_PATH = (
-        "/opt/homebrew/bin/ffmpeg"
-        if Path("/opt/homebrew/bin/ffmpeg").exists()
-        else "/usr/local/bin/ffmpeg"
-    )
-else:                                           # Linux / other
-    ROOT_DIR    = str(Path.home() / "Shows")
-    FFMPEG_PATH = "/usr/bin/ffmpeg"
+    _FFMPEG_FALLBACKS = [
+        "/opt/homebrew/bin/ffmpeg",   # Apple Silicon Homebrew
+        "/usr/local/bin/ffmpeg",      # Intel Homebrew / manual install
+    ]
+else:
+    _FFMPEG_FALLBACKS = ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+
+FFMPEG_PATH: str = (
+    _shutil.which("ffmpeg")
+    or next((c for c in _FFMPEG_FALLBACKS if Path(c).exists()), "")
+)
 
 # Path to the sibling BlastPlayer project.
 # Resolved at import time; overridable by setting constants.BLAST_PLAYER_PATH.

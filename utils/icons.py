@@ -141,27 +141,40 @@ def get_file_icon(path, icon_size) -> QIcon:
     ext = Path(path).suffix.lower()
 
     if ext in IMAGE_EXTS:
-        w, h  = _wh(icon_size)
-        cache = _img_cache_path(path, w, h)
+        w, h = _wh(icon_size)
 
-        # ── Cache hit: tiny pre-scaled JPEG → near-zero decode cost ───────
-        if cache.exists():
-            pix = QPixmap(str(cache))
+        # ── Disk cache (best-effort — any failure falls back to direct load) ─
+        try:
+            cache = _img_cache_path(path, w, h)
+
+            # Cache hit: tiny pre-scaled JPEG → near-zero decode cost
+            if cache.exists():
+                pix = QPixmap(str(cache))
+                if not pix.isNull():
+                    return QIcon(pix)
+
+            # Cache miss: load original, crop to target size, persist
+            pix = QPixmap(path)
             if not pix.isNull():
-                return QIcon(pix)
+                scaled  = pix.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                x       = (scaled.width()  - w) // 2
+                y       = (scaled.height() - h) // 2
+                cropped = scaled.copy(x, y, w, h)
+                try:
+                    cropped.save(str(cache), "JPEG", 85)
+                except Exception:
+                    pass   # cache write failure is non-fatal
+                return QIcon(cropped)
 
-        # ── Cache miss: load original, crop to target size, persist ───────
+        except Exception:
+            # Cache directory creation or any other cache error — fall through
+            # to the direct load below so thumbnails always appear.
+            pass
+
+        # ── Direct load (cache unavailable) ───────────────────────────────
         pix = QPixmap(path)
         if not pix.isNull():
-            scaled  = pix.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            x       = (scaled.width()  - w) // 2
-            y       = (scaled.height() - h) // 2
-            cropped = scaled.copy(x, y, w, h)
-            try:
-                cropped.save(str(cache), "JPEG", 85)
-            except Exception:
-                pass   # cache write failure is non-fatal
-            return QIcon(cropped)
+            return _fill_icon(pix, icon_size)
 
         return make_placeholder_icon(BORDER, icon_size, "IMG")
 
