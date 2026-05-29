@@ -6,7 +6,8 @@
     "delivery",
     "cameras",
     "fx",
-    "audio"
+    "audio",
+    "assets"
   ],
   "studio_name": "TEST ANIMATION STUDIOS",
   "root_dir": "C:\\SHOWS",
@@ -42,5 +43,19 @@
     "tharvard",
     "thavard",
     "tswift"
+  ],
+  "ffmpeg_path": "C:\\ffmpeg\\bin\\ffmpeg.exe",
+  "blast_player_path": "C:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastPlayer\\main.py",
+  "window_geometry": {
+    "maximized": true,
+    "x": 1270,
+    "y": 396,
+    "width": 1551,
+    "height": 600
+  },
+  "splitter_sizes": [
+    573,
+    2317,
+    546
   ]
 }

@@ -1,17 +1,18 @@
 import sys
+import subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5.QtWidgets import (
     QDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView,
-    QFileDialog, QTabWidget, QWidget,
+    QFileDialog, QTabWidget, QWidget, QFrame,
 )
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QIcon
 
 from core import constants
-from core.config import save_config
+from core.config import save_config, export_config, import_config
 from core.styles import dialog_list_style, input_style
 
 
@@ -21,7 +22,7 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setFixedSize(500, 580)
+        self.setFixedSize(520, 620)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.create_widgets()
@@ -34,36 +35,18 @@ class SettingsDialog(QDialog):
 
     def create_widgets(self):
         # ── General tab ─────────────────────────────────────────────────
-        self.studio_name_label   = QLabel("Studio Name:")
+        self.studio_name_label    = QLabel("Studio Name:")
         self.studio_name_lineEdit = QLineEdit()
         self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
-        self.studio_name_lineEdit.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: {constants.BORDER};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.BG};
-                border-radius: 4px;
-                padding: 4px 5px;
-            }}
-            QLineEdit:focus {{ border: 1px solid {constants.ACCENT}; }}
-        """)
+        self.studio_name_lineEdit.setStyleSheet(self._input_style())
 
-        self.studio_root_label   = QLabel("Studio Root:")
+        self.studio_root_label    = QLabel("Studio Root:")
         self.studio_root_lineEdit = QLineEdit()
         self.studio_root_lineEdit.setText(constants.ROOT_DIR)
         self.studio_root_lineEdit.setPlaceholderText(
             r"e.g.  Z:\SHOWS  or  \\server\shows  or  /Volumes/server/shows"
         )
-        self.studio_root_lineEdit.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: {constants.BORDER};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.BG};
-                border-radius: 4px;
-                padding: 4px 5px;
-            }}
-            QLineEdit:focus {{ border: 1px solid {constants.ACCENT}; }}
-        """)
+        self.studio_root_lineEdit.setStyleSheet(self._input_style())
 
         self.studio_root_browse_btn = QPushButton()
         self.studio_root_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
@@ -71,19 +54,14 @@ class SettingsDialog(QDialog):
         self.studio_root_browse_btn.setStyleSheet(self._btn_style())
 
         self.section_label = QLabel("Excluded Folder Patterns")
-        self.section_label.setStyleSheet(f"""
-            font-size: 14px; font-weight: bold;
-            color: {constants.TEXT_PRI}; background: transparent;
-        """)
+        self.section_label.setStyleSheet(self._section_style())
 
         self.hint_label = QLabel(
             "Folders matching these patterns will be hidden.\n"
             "Supports wildcards: * (any chars), ? (single char)\n"
             "Examples: _archive, backup*, *.tmp, .hidden"
         )
-        self.hint_label.setStyleSheet(
-            f"font-size: 11px; color: {constants.TEXT_SEC}; background: transparent;"
-        )
+        self.hint_label.setStyleSheet(self._hint_style())
 
         self.pattern_list = QListWidget()
         self.pattern_list.setStyleSheet(dialog_list_style())
@@ -104,18 +82,13 @@ class SettingsDialog(QDialog):
 
         # ── Departments tab ──────────────────────────────────────────────
         self.dept_section_label = QLabel("Departments")
-        self.dept_section_label.setStyleSheet(f"""
-            font-size: 14px; font-weight: bold;
-            color: {constants.TEXT_PRI}; background: transparent;
-        """)
+        self.dept_section_label.setStyleSheet(self._section_style())
 
         self.dept_hint_label = QLabel(
             "These departments appear in the filter bar.\n"
             "\"All\" is always available and cannot be removed."
         )
-        self.dept_hint_label.setStyleSheet(
-            f"font-size: 11px; color: {constants.TEXT_SEC}; background: transparent;"
-        )
+        self.dept_hint_label.setStyleSheet(self._hint_style())
 
         self.dept_list = QListWidget()
         self.dept_list.setStyleSheet(dialog_list_style())
@@ -150,19 +123,14 @@ class SettingsDialog(QDialog):
 
         # ── Artists tab ──────────────────────────────────────────────────
         self.artist_section_label = QLabel("Artists")
-        self.artist_section_label.setStyleSheet(f"""
-            font-size: 14px; font-weight: bold;
-            color: {constants.TEXT_PRI}; background: transparent;
-        """)
+        self.artist_section_label.setStyleSheet(self._section_style())
 
         self.artist_hint_label = QLabel(
             "These artists appear in the filter bar.\n"
             "Use the same username token that appears in your filenames.\n"
             "\"All\" is always available and cannot be removed."
         )
-        self.artist_hint_label.setStyleSheet(
-            f"font-size: 11px; color: {constants.TEXT_SEC}; background: transparent;"
-        )
+        self.artist_hint_label.setStyleSheet(self._hint_style())
 
         self.artist_list = QListWidget()
         self.artist_list.setStyleSheet(dialog_list_style())
@@ -195,7 +163,60 @@ class SettingsDialog(QDialog):
         self.artist_down_btn.setToolTip("Move down")
         self.artist_down_btn.setStyleSheet(self._btn_style())
 
+        # ── Tools tab ────────────────────────────────────────────────────
+        self.ffmpeg_section_label = QLabel("FFmpeg")
+        self.ffmpeg_section_label.setStyleSheet(self._section_style())
+
+        self.ffmpeg_hint_label = QLabel(
+            "Required for video thumbnail extraction and audio playback."
+        )
+        self.ffmpeg_hint_label.setStyleSheet(self._hint_style())
+
+        self.ffmpeg_path_edit = QLineEdit()
+        self.ffmpeg_path_edit.setText(constants.FFMPEG_PATH)
+        self.ffmpeg_path_edit.setStyleSheet(self._input_style())
+
+        self.ffmpeg_browse_btn = QPushButton()
+        self.ffmpeg_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
+        self.ffmpeg_browse_btn.setIconSize(QSize(12, 12))
+        self.ffmpeg_browse_btn.setToolTip("Browse for ffmpeg executable")
+        self.ffmpeg_browse_btn.setStyleSheet(self._btn_style())
+
+        self.ffmpeg_test_btn = QPushButton("Test")
+        self.ffmpeg_test_btn.setFixedWidth(54)
+        self.ffmpeg_test_btn.setToolTip("Run ffmpeg -version to verify")
+        self.ffmpeg_test_btn.setStyleSheet(self._btn_style())
+
+        self.ffmpeg_status_lbl = QLabel("")
+        self.ffmpeg_status_lbl.setStyleSheet(
+            f"background: transparent; font-size: 11px; color: {constants.TEXT_SEC};"
+        )
+
+        self.player_section_label = QLabel("BlastPlayer")
+        self.player_section_label.setStyleSheet(self._section_style())
+
+        self.player_hint_label = QLabel(
+            "Path to BlastPlayer's main.py — used for \"Open in BlastPlayer\"."
+        )
+        self.player_hint_label.setStyleSheet(self._hint_style())
+
+        self.player_path_edit = QLineEdit()
+        self.player_path_edit.setText(str(constants.BLAST_PLAYER_PATH))
+        self.player_path_edit.setStyleSheet(self._input_style())
+
+        self.player_browse_btn = QPushButton()
+        self.player_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
+        self.player_browse_btn.setIconSize(QSize(12, 12))
+        self.player_browse_btn.setToolTip("Browse for BlastPlayer main.py")
+        self.player_browse_btn.setStyleSheet(self._btn_style())
+
         # ── Shared action buttons ────────────────────────────────────────
+        self.import_btn = QPushButton("Import Config…")
+        self.import_btn.setStyleSheet(self._btn_style())
+
+        self.export_btn = QPushButton("Export Config…")
+        self.export_btn.setStyleSheet(self._btn_style())
+
         self.save_btn = QPushButton("Save")
         self.save_btn.setFixedWidth(100)
         self.save_btn.setStyleSheet(self._btn_style(hover_color=constants.ACCENT_HI))
@@ -294,6 +315,38 @@ class SettingsDialog(QDialog):
         art.addWidget(self.artist_remove_btn)
         art.addStretch()
 
+        # ── Tools tab ────────────────────────────────────────────────────
+        tools_tab = QWidget()
+        tools = QVBoxLayout(tools_tab)
+        tools.setContentsMargins(15, 15, 15, 15)
+        tools.setSpacing(10)
+
+        tools.addWidget(self.ffmpeg_section_label)
+        tools.addWidget(self.ffmpeg_hint_label)
+
+        ffmpeg_row = QHBoxLayout()
+        ffmpeg_row.addWidget(self.ffmpeg_path_edit)
+        ffmpeg_row.addWidget(self.ffmpeg_browse_btn)
+        ffmpeg_row.addWidget(self.ffmpeg_test_btn)
+        tools.addLayout(ffmpeg_row)
+        tools.addWidget(self.ffmpeg_status_lbl)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet(f"background: {constants.SPLITTER_COLOR};")
+        sep.setFixedHeight(1)
+        tools.addWidget(sep)
+
+        tools.addWidget(self.player_section_label)
+        tools.addWidget(self.player_hint_label)
+
+        player_row = QHBoxLayout()
+        player_row.addWidget(self.player_path_edit)
+        player_row.addWidget(self.player_browse_btn)
+        tools.addLayout(player_row)
+
+        tools.addStretch()
+
         # ── Tab widget ───────────────────────────────────────────────────
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet(f"""
@@ -320,6 +373,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(general_tab,  "General")
         self.tabs.addTab(dept_tab,     "Departments")
         self.tabs.addTab(artist_tab,   "Artists")
+        self.tabs.addTab(tools_tab,    "Tools")
 
         # ── Main dialog layout ───────────────────────────────────────────
         main = QVBoxLayout(self)
@@ -328,6 +382,8 @@ class SettingsDialog(QDialog):
         main.addWidget(self.tabs)
 
         btn_row = QHBoxLayout()
+        btn_row.addWidget(self.import_btn)
+        btn_row.addWidget(self.export_btn)
         btn_row.addStretch()
         btn_row.addWidget(self.cancel_btn)
         btn_row.addWidget(self.save_btn)
@@ -358,7 +414,14 @@ class SettingsDialog(QDialog):
         self.artist_down_btn.clicked.connect(self._on_artist_move_down)
         self.artist_input.returnPressed.connect(self._on_artist_add)
 
+        # Tools
+        self.ffmpeg_browse_btn.clicked.connect(self._on_browse_ffmpeg)
+        self.ffmpeg_test_btn.clicked.connect(self._on_test_ffmpeg)
+        self.player_browse_btn.clicked.connect(self._on_browse_player)
+
         # Dialog buttons
+        self.import_btn.clicked.connect(self._on_import_config)
+        self.export_btn.clicked.connect(self._on_export_config)
         self.save_btn.clicked.connect(self._on_save)
         self.cancel_btn.clicked.connect(self.reject)
 
@@ -462,6 +525,104 @@ class SettingsDialog(QDialog):
         self.artist_list.setCurrentRow(row + 1)
 
     # ------------------------------------------------------------------ #
+    #  Tools tab slots                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _on_browse_ffmpeg(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select FFmpeg executable",
+            str(Path(constants.FFMPEG_PATH).parent),
+        )
+        if path:
+            self.ffmpeg_path_edit.setText(path)
+            self.ffmpeg_status_lbl.setText("")
+
+    def _on_test_ffmpeg(self):
+        path = self.ffmpeg_path_edit.text().strip()
+        if not path or not Path(path).is_file():
+            self._set_ffmpeg_status("Not found at this path.", ok=False)
+            return
+        try:
+            result = subprocess.run(
+                [path, "-version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                first_line = result.stdout.decode(errors="replace").splitlines()[0]
+                self._set_ffmpeg_status(f"✓  {first_line}", ok=True)
+            else:
+                self._set_ffmpeg_status("Process returned an error.", ok=False)
+        except FileNotFoundError:
+            self._set_ffmpeg_status("Executable not found.", ok=False)
+        except subprocess.TimeoutExpired:
+            self._set_ffmpeg_status("Timed out — check the path.", ok=False)
+        except Exception as e:
+            self._set_ffmpeg_status(str(e), ok=False)
+
+    def _set_ffmpeg_status(self, msg: str, ok: bool):
+        color = constants.SUCCESS if ok else constants.FAIL
+        self.ffmpeg_status_lbl.setStyleSheet(
+            f"background: transparent; font-size: 11px; color: {color};"
+        )
+        self.ffmpeg_status_lbl.setText(msg)
+
+    def _on_browse_player(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select BlastPlayer main.py",
+            str(constants.BLAST_PLAYER_PATH.parent),
+            "Python files (*.py);;All files (*)",
+        )
+        if path:
+            self.player_path_edit.setText(path)
+
+    # ------------------------------------------------------------------ #
+    #  Import / Export slots                                               #
+    # ------------------------------------------------------------------ #
+
+    def _on_export_config(self):
+        dest, _ = QFileDialog.getSaveFileName(
+            self, "Export Config",
+            str(Path.home() / "blastvault_config.json"),
+            "JSON files (*.json);;All files (*)",
+        )
+        if not dest:
+            return
+        if export_config(dest):
+            self.export_btn.setText("Exported ✓")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(2000, lambda: self.export_btn.setText("Export Config…"))
+        else:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Export failed",
+                                "Could not write the config file to that location.")
+
+    def _on_import_config(self):
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Import Config",
+            str(Path.home()),
+            "JSON files (*.json);;All files (*)",
+        )
+        if not src:
+            return
+        if import_config(src):
+            # Refresh all list widgets to reflect the imported values
+            self._populate_pattern_list()
+            self._populate_dept_list()
+            self._populate_artist_list()
+            self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
+            self.studio_root_lineEdit.setText(constants.ROOT_DIR)
+            self.ffmpeg_path_edit.setText(constants.FFMPEG_PATH)
+            self.player_path_edit.setText(str(constants.BLAST_PLAYER_PATH))
+            self.ffmpeg_status_lbl.setText("")
+            self.settings_changed.emit()
+        else:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Import failed",
+                                "Could not read the selected config file.")
+
+    # ------------------------------------------------------------------ #
     #  Save                                                                #
     # ------------------------------------------------------------------ #
 
@@ -478,17 +639,26 @@ class SettingsDialog(QDialog):
             self.studio_root_lineEdit.text().strip() or constants.ROOT_DIR
         )
 
-        # Departments — "All" is always first, never stored in the list widget
+        # Departments — "All" always first, order preserved from list widget
         constants.DEPARTMENTS = ["All"] + [
             self.dept_list.item(i).text()
             for i in range(self.dept_list.count())
         ]
 
-        # Artists — same pattern as departments
+        # Artists — same pattern
         constants.ARTISTS = ["All"] + [
             self.artist_list.item(i).text()
             for i in range(self.artist_list.count())
         ]
+
+        # Tools
+        ffmpeg = self.ffmpeg_path_edit.text().strip()
+        if ffmpeg:
+            constants.FFMPEG_PATH = ffmpeg
+
+        player = self.player_path_edit.text().strip()
+        if player:
+            constants.BLAST_PLAYER_PATH = Path(player)
 
         save_config()
         self.settings_changed.emit()
@@ -504,18 +674,39 @@ class SettingsDialog(QDialog):
             self.pattern_list.addItem(QListWidgetItem(pattern))
 
     def _populate_dept_list(self):
-        """Populate the departments list, excluding the always-present 'All'."""
+        """Populate departments list in their saved order, excluding 'All'."""
         self.dept_list.clear()
         for dept in constants.DEPARTMENTS:
             if dept != "All":
                 self.dept_list.addItem(QListWidgetItem(dept))
 
     def _populate_artist_list(self):
-        """Populate the artists list, excluding the always-present 'All'."""
+        """Populate artists list in their saved order, excluding 'All'."""
         self.artist_list.clear()
         for artist in constants.ARTISTS:
             if artist != "All":
                 self.artist_list.addItem(QListWidgetItem(artist))
+
+    def _section_style(self) -> str:
+        return (
+            f"font-size: 14px; font-weight: bold;"
+            f" color: {constants.TEXT_PRI}; background: transparent;"
+        )
+
+    def _hint_style(self) -> str:
+        return f"font-size: 11px; color: {constants.TEXT_SEC}; background: transparent;"
+
+    def _input_style(self) -> str:
+        return f"""
+            QLineEdit {{
+                background-color: {constants.BORDER};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.BG};
+                border-radius: 4px;
+                padding: 4px 5px;
+            }}
+            QLineEdit:focus {{ border: 1px solid {constants.ACCENT}; }}
+        """
 
     def _btn_style(self, hover_color: str = None) -> str:
         hover = hover_color or constants.BORDER

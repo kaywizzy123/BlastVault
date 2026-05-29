@@ -1,3 +1,5 @@
+import hashlib
+import os
 from pathlib import Path
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
@@ -6,6 +8,34 @@ from core.constants import (
     BORDER, TEXT_PRI, THUMB_CACHE_DIR, ICONS_DIR,
     IMAGE_EXTS, AUDIO_EXTS, OBJ_3D_EXTS, DOC_EXTS,
 )
+
+# Subdirectory of THUMB_CACHE_DIR used for scaled image thumbnails.
+# Created lazily on first use so startup cost stays zero.
+_IMG_CACHE_DIR: Path | None = None
+
+
+def _img_cache_dir() -> Path:
+    global _IMG_CACHE_DIR
+    if _IMG_CACHE_DIR is None:
+        _IMG_CACHE_DIR = THUMB_CACHE_DIR / "img"
+        _IMG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return _IMG_CACHE_DIR
+
+
+def _img_cache_path(path: str, w: int, h: int) -> Path:
+    """Return the cache-file path for a scaled image thumbnail.
+
+    The key encodes the source path, its mtime, and the target size so that:
+
+    * modifying the source file → different mtime → cache miss (old entry orphaned)
+    * changing the thumbnail-size slider → different WxH → fresh entry at new size
+    """
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = 0.0
+    digest = hashlib.md5(f"{path}:{mtime}:{w}x{h}".encode()).hexdigest()
+    return _img_cache_dir() / f"{digest}.jpg"
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -109,11 +139,32 @@ def make_placeholder_icon(color, size, symbol: str = "?") -> QIcon:
 
 def get_file_icon(path, icon_size) -> QIcon:
     ext = Path(path).suffix.lower()
+
     if ext in IMAGE_EXTS:
-        pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            return _fill_icon(pixmap, icon_size)
+        w, h  = _wh(icon_size)
+        cache = _img_cache_path(path, w, h)
+
+        # ── Cache hit: tiny pre-scaled JPEG → near-zero decode cost ───────
+        if cache.exists():
+            pix = QPixmap(str(cache))
+            if not pix.isNull():
+                return QIcon(pix)
+
+        # ── Cache miss: load original, crop to target size, persist ───────
+        pix = QPixmap(path)
+        if not pix.isNull():
+            scaled  = pix.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            x       = (scaled.width()  - w) // 2
+            y       = (scaled.height() - h) // 2
+            cropped = scaled.copy(x, y, w, h)
+            try:
+                cropped.save(str(cache), "JPEG", 85)
+            except Exception:
+                pass   # cache write failure is non-fatal
+            return QIcon(cropped)
+
         return make_placeholder_icon(BORDER, icon_size, "IMG")
+
     elif ext in AUDIO_EXTS:
         return make_placeholder_icon("#2e1a2e", icon_size, "♫")
     elif ext in OBJ_3D_EXTS:

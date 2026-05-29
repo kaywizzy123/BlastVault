@@ -54,6 +54,15 @@ else:                                           # Linux / other
     ROOT_DIR    = str(Path.home() / "Shows")
     FFMPEG_PATH = "/usr/bin/ffmpeg"
 
+# Path to the sibling BlastPlayer project.
+# Resolved at import time; overridable by setting constants.BLAST_PLAYER_PATH.
+BLAST_PLAYER_PATH: Path = _ROOT.parent / "BlastPlayer" / "main.py"
+
+# Window / splitter state — persisted across sessions via config.json.
+WINDOW_MAXIMIZED: bool  = True
+WINDOW_GEOMETRY:  tuple = ()    # (x, y, w, h) — empty → default (maximised)
+SPLITTER_SIZES:   list  = []    # empty → use hardcoded defaults in MainWindow
+
 GRID_ICON_W    = 180          # icon width  — 16:9 asset grid
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
 GRID_ICON_SIZE = GRID_ICON_W  # kept for thumbnail-loader / icon-builder compat

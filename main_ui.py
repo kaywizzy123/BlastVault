@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
         self.center_panel.items_loaded.connect(self.footer.update_items)
         self.center_panel.selection_changed.connect(self.footer.update_selection)
         self.center_panel.file_selected.connect(self.right_panel.display_metadata)
+        self.center_panel.filters_cleared.connect(self.on_filters_cleared)
 
     def on_folder_selected(self, path):
         self.header_widget.search_bar.clear()
@@ -135,22 +136,44 @@ class MainWindow(QMainWindow):
         dialog.settings_changed.connect(self.on_settings_changed)
         dialog.exec_()
 
+    def on_filters_cleared(self):
+        """Reset all header filter controls to their default 'All'/empty state."""
+        self.header_widget.search_bar.blockSignals(True)
+        self.header_widget.search_bar.clear()
+        self.header_widget.search_bar.blockSignals(False)
+
+        self.header_widget.department_filter_combobox.blockSignals(True)
+        self.header_widget.department_filter_combobox.setCurrentIndex(0)
+        self.header_widget.department_filter_combobox.blockSignals(False)
+
+        self.header_widget.artist_filter_combobox.blockSignals(True)
+        self.header_widget.artist_filter_combobox.setCurrentIndex(0)
+        self.header_widget.artist_filter_combobox.blockSignals(False)
+
     def on_artists_found(self, artists: list):
         """Called every time a folder finishes loading.
 
-        - Adds any newly discovered artist tokens to ``constants.ARTISTS`` and
-          saves config so they persist across sessions.
+        - Appends newly discovered artist tokens to ``constants.ARTISTS`` in
+          discovery order (no re-sort — preserves user-defined order from Settings).
         - Always refreshes the artist combobox so it updates immediately in
           the current session.
         """
         new = [a for a in artists if a and a not in constants.ARTISTS]
         if new:
             constants.ARTISTS.extend(new)
-            rest = sorted(a for a in constants.ARTISTS if a != "All")
-            constants.ARTISTS = ["All"] + rest
             save_config()
         # Refresh combobox on every load — new artists or not
         self.header_widget.reload_artists()
+
+    def closeEvent(self, event):
+        """Save window geometry and splitter state before closing."""
+        constants.SPLITTER_SIZES   = self.splitter.sizes()
+        constants.WINDOW_MAXIMIZED = self.isMaximized()
+        if not self.isMaximized():
+            geo = self.geometry()
+            constants.WINDOW_GEOMETRY = (geo.x(), geo.y(), geo.width(), geo.height())
+        save_config()
+        super().closeEvent(event)
 
     def on_settings_changed(self):
         self.header_widget.update_studio_label(constants.STUDIO_NAME)
@@ -183,7 +206,14 @@ if __name__ == "__main__":
 
     def _finish():
         splash.close()
-        window.showMaximized()
+        if constants.SPLITTER_SIZES:
+            window.splitter.setSizes(constants.SPLITTER_SIZES)
+        if not constants.WINDOW_MAXIMIZED and constants.WINDOW_GEOMETRY:
+            x, y, w, h = constants.WINDOW_GEOMETRY
+            window.setGeometry(x, y, w, h)
+            window.show()
+        else:
+            window.showMaximized()
 
     QTimer.singleShot(remaining_ms, _finish)
     sys.exit(app.exec_())

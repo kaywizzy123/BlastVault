@@ -1,11 +1,13 @@
 import sys
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QListWidget, QListWidgetItem,
+    QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QAbstractItemView, QLabel, QApplication, QMenu, QStackedWidget,
+    QPushButton,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher, QMimeData, QUrl
 from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag
@@ -111,11 +113,12 @@ class ThumbnailPreviewPopup(QWidget):
 # ──────────────────────────────────────────────────────────────────────────── #
 
 class CenterPanel(QWidget):
-    folder_changed   = pyqtSignal(str)
-    items_loaded     = pyqtSignal(int)
+    folder_changed    = pyqtSignal(str)
+    items_loaded      = pyqtSignal(int)
     selection_changed = pyqtSignal(int)
-    file_selected    = pyqtSignal(str)   # single file path, or "" if none/multi
-    artists_found    = pyqtSignal(list)  # unique artist names in the loaded folder
+    file_selected     = pyqtSignal(str)   # single file path, or "" if none/multi
+    artists_found     = pyqtSignal(list)  # unique artist names in the loaded folder
+    filters_cleared   = pyqtSignal()      # emitted when the "Clear filters" button is clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -184,6 +187,38 @@ class CenterPanel(QWidget):
         self.list_widget.viewport().setMouseTracking(True)
         self.list_widget.viewport().installEventFilter(self)
 
+        # ── Empty / welcome state ────────────────────────────────────────
+        self._empty_icon_lbl = QLabel()
+        self._empty_icon_lbl.setAlignment(Qt.AlignHCenter)
+        self._empty_icon_lbl.setStyleSheet("background: transparent;")
+
+        self._empty_title_lbl = QLabel()
+        self._empty_title_lbl.setAlignment(Qt.AlignHCenter)
+        self._empty_title_lbl.setStyleSheet(
+            f"background: transparent; color: {constants.TEXT_PRI};"
+            f" font-size: 15px; font-weight: bold;"
+        )
+
+        self._empty_sub_lbl = QLabel()
+        self._empty_sub_lbl.setAlignment(Qt.AlignHCenter)
+        self._empty_sub_lbl.setWordWrap(True)
+        self._empty_sub_lbl.setStyleSheet(
+            f"background: transparent; color: {constants.TEXT_SEC}; font-size: 12px;"
+        )
+
+        self._clear_filters_btn = QPushButton("Clear filters")
+        self._clear_filters_btn.setFixedWidth(120)
+        self._clear_filters_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_PRI};
+                border: none;
+                padding: 6px 12px;
+                border-radius: 5px;
+            }}
+            QPushButton:hover {{ background-color: {constants.ACCENT_HI}; }}
+        """)
+
     def create_layout(self):
         # Loading page — centred label shown while folder is being read
         loading_page = QWidget()
@@ -192,10 +227,33 @@ class CenterPanel(QWidget):
         lp_layout.addWidget(self._loading_label)
         lp_layout.addStretch()
 
+        # Empty / welcome page — centred message with optional clear button
+        empty_page = QWidget()
+        ep_layout  = QVBoxLayout(empty_page)
+        ep_layout.setSpacing(6)
+        ep_layout.addStretch(3)
+        ep_layout.addWidget(self._empty_icon_lbl)
+        ep_layout.addSpacing(8)
+        ep_layout.addWidget(self._empty_title_lbl)
+        ep_layout.addSpacing(4)
+        ep_layout.addWidget(self._empty_sub_lbl)
+        ep_layout.addSpacing(16)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(self._clear_filters_btn)
+        btn_row.addStretch()
+        ep_layout.addLayout(btn_row)
+        ep_layout.addStretch(4)
+
         self._stack = QStackedWidget()
         self._stack.addWidget(loading_page)      # index 0 — loading
         self._stack.addWidget(self.list_widget)  # index 1 — content
-        self._stack.setCurrentIndex(1)
+        self._stack.addWidget(empty_page)        # index 2 — empty / welcome
+
+        # Show welcome state on startup — no folder selected yet
+        self._show_empty("folder.png", "No folder selected",
+                         "Choose a catalog or browse to a folder to get started.",
+                         show_clear=False)
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(2, 2, 2, 2)
@@ -206,6 +264,7 @@ class CenterPanel(QWidget):
         self.list_widget.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
         self.list_widget.customContextMenuRequested.connect(self._show_context_menu)
+        self._clear_filters_btn.clicked.connect(self._on_clear_filters)
 
     def _setup_watcher(self):
         """Initialise the folder watcher and its 2-second debounce timer."""
@@ -224,6 +283,14 @@ class CenterPanel(QWidget):
     def load_folder(self, path: str):
         self._show_loading()
         QApplication.processEvents()   # let Qt render the indicator before blocking
+
+        # ── Accessibility pre-check (non-blocking, 3 s timeout) ───────────
+        ok, err_title, err_msg = self._check_path(path)
+        if not ok:
+            self._hide_loading()
+            self._show_empty("cancel.png", err_title, err_msg,
+                             show_clear=False, error=True)
+            return
 
         self.current_path = path
         self._reset_hover()
@@ -346,6 +413,7 @@ class CenterPanel(QWidget):
         # (canonical, ext)        -> (ctime, Path)  — best file overall (fallback)
         overall: dict[tuple, tuple] = {}
 
+        _scan_error: str = ""
         try:
             for root, dirs, files in os.walk(folder):
                 dirs[:] = sorted(
@@ -374,8 +442,17 @@ class CenterPanel(QWidget):
                     overall_key = (can, ext)
                     if overall_key not in overall or ctime > overall[overall_key][0]:
                         overall[overall_key] = (ctime, p)
-        except PermissionError:
-            pass
+        except PermissionError as e:
+            _scan_error = f"Permission denied — some files could not be read.\n{e}"
+        except OSError as e:
+            _scan_error = str(e)
+
+        # If the scan failed entirely with no results, show the error and bail
+        if _scan_error and not overall:
+            self._hide_loading()
+            self._show_empty("cancel.png", "Cannot read folder",
+                             _scan_error, show_clear=False, error=True)
+            return
 
         # Build lookup: (canonical, ext) -> {dept: Path, '_overall': Path}
         asset_versions: dict[tuple, dict] = {}
@@ -413,6 +490,7 @@ class CenterPanel(QWidget):
 
         thumbnail_paths = []
         artists: set[str] = set()
+        _scan_error = ""
         try:
             entries = sorted(folder.iterdir(), key=self._entry_sort_key)
             for p in entries:
@@ -437,8 +515,17 @@ class CenterPanel(QWidget):
                         artists.add(artist)
                     item = self._make_file_item(p.stem, p, ext, icon_size, thumbnail_paths, meta)
                 self.list_widget.addItem(item)
-        except PermissionError:
-            pass
+        except PermissionError as e:
+            _scan_error = f"Permission denied — some files could not be read.\n{e}"
+        except OSError as e:
+            _scan_error = str(e)
+
+        # If the scan failed entirely with no results, show the error and bail
+        if _scan_error and self.list_widget.count() == 0:
+            self._hide_loading()
+            self._show_empty("cancel.png", "Cannot read folder",
+                             _scan_error, show_clear=False, error=True)
+            return
 
         self._start_thumbnail_loader(thumbnail_paths, icon_size)
         self._hide_loading()
@@ -550,6 +637,121 @@ class CenterPanel(QWidget):
                 artist_ok = artist in ("All", "") or item.data(Qt.UserRole + 4) == artist
 
             item.setHidden(not (name_ok and dept_ok and artist_ok))
+
+        self._update_empty_state()
+
+    def _show_empty(self, icon_name: str, title: str, subtitle: str,
+                    show_clear: bool, error: bool = False):
+        """Switch to the empty-state page with the given message.
+
+        *icon_name* is a filename (without path) from ``constants.ICONS_DIR``.
+        Set *error* to True to render the title in the failure colour.
+        """
+        pix = QPixmap(str(constants.ICONS_DIR / icon_name))
+        if not pix.isNull():
+            self._empty_icon_lbl.setPixmap(
+                pix.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        else:
+            self._empty_icon_lbl.clear()
+
+        title_color = constants.FAIL if error else constants.TEXT_PRI
+        self._empty_title_lbl.setStyleSheet(
+            f"background: transparent; color: {title_color};"
+            f" font-size: 15px; font-weight: bold;"
+        )
+        self._empty_title_lbl.setText(title)
+        self._empty_sub_lbl.setText(subtitle)
+        self._clear_filters_btn.setVisible(show_clear)
+        self._stack.setCurrentIndex(2)
+
+    def _check_path(self, path: str, timeout: float = 3.0) -> tuple:
+        """Return ``(ok, title, message)`` — never blocks the main thread longer than *timeout* s.
+
+        Runs ``Path.exists() / is_dir()`` in a daemon thread so an unreachable
+        network mount doesn't freeze the UI while the OS times out.
+        """
+        result = [True, "", ""]
+
+        def _probe():
+            p = Path(path)
+            try:
+                if not p.exists():
+                    result[0] = False
+                    result[1] = "Folder not found"
+                    result[2] = f"This folder no longer exists:\n{path}"
+                elif not p.is_dir():
+                    result[0] = False
+                    result[1] = "Not a folder"
+                    result[2] = f"This path is not a folder:\n{path}"
+            except PermissionError:
+                result[0] = False
+                result[1] = "Permission denied"
+                result[2] = f"You don't have permission to access:\n{path}"
+            except OSError as e:
+                result[0] = False
+                result[1] = "Cannot access folder"
+                result[2] = str(e)
+
+        t = threading.Thread(target=_probe, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+
+        if t.is_alive():
+            return (
+                False,
+                "Network path unreachable",
+                f"No response after {timeout:.0f} s — the share may be offline:\n{path}",
+            )
+
+        return tuple(result)
+
+    def _update_empty_state(self):
+        """After filtering, decide whether to show content or an empty message."""
+        total   = self.list_widget.count()
+        visible = sum(
+            1 for i in range(total)
+            if not self.list_widget.item(i).isHidden()
+        )
+
+        if visible > 0:
+            self._stack.setCurrentIndex(1)
+            return
+
+        filters_active = (
+            bool(self._text_filter)
+            or self._dept_filter   not in ("All", "")
+            or self._artist_filter not in ("All", "")
+        )
+
+        if total == 0:
+            # Folder loaded but contained no matching files
+            self._show_empty(
+                "open-file.png",
+                "Folder is empty",
+                "No supported files were found here.",
+                show_clear=False,
+            )
+        elif filters_active:
+            # Files exist but all hidden by active filters
+            self._show_empty(
+                "search.png",
+                "No results",
+                "No files match your current filters.",
+                show_clear=True,
+            )
+        else:
+            # Shouldn't normally reach here, but guard anyway
+            self._stack.setCurrentIndex(1)
+
+    def _on_clear_filters(self):
+        """Reset all internal filters, reload, and notify the header."""
+        self._text_filter   = ""
+        self._dept_filter   = "All"
+        self._artist_filter = "All"
+        self.filters_cleared.emit()          # header widget resets its combos
+        if self.current_path:
+            self.load_folder(self.current_path)
 
     # ------------------------------------------------------------------ #
     #  Hover-preview                                                       #
@@ -708,6 +910,12 @@ class CenterPanel(QWidget):
             )
 
             if not is_folder:
+                ext = Path(path).suffix.lower()
+                if ext in constants.VIDEO_EXTS:
+                    menu.addSeparator()
+                    player_act = menu.addAction("Open in BlastPlayer")
+                    player_act.triggered.connect(lambda: self._open_in_blast_player(path))
+
                 menu.addSeparator()
                 if sys.platform == "win32":
                     reveal_label = "Show in Explorer"
@@ -727,6 +935,23 @@ class CenterPanel(QWidget):
 
     def _copy_to_clipboard(self, text: str):
         QApplication.clipboard().setText(text)
+
+    def _open_in_blast_player(self, path: str):
+        """Launch BlastPlayer in a separate process with *path* pre-loaded."""
+        player = constants.BLAST_PLAYER_PATH
+        if not player.is_file():
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "BlastPlayer not found",
+                f"Could not locate BlastPlayer at:\n{player}\n\n"
+                "Check that BlastPlayer is installed alongside BlastVault."
+            )
+            return
+        try:
+            subprocess.Popen([sys.executable, str(player), path])
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Launch failed", str(e))
 
     def _reveal_in_explorer(self, path: str):
         """Open the file's parent folder and select/highlight the file."""
