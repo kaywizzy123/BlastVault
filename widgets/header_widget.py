@@ -2,7 +2,10 @@
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton, QFrame, QSlider
+from PyQt5.QtWidgets import (
+    QWidget, QHBoxLayout, QLabel, QLineEdit, QComboBox,
+    QPushButton, QFrame, QSlider, QSizePolicy,
+)
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QIcon
 
@@ -33,13 +36,16 @@ class HeaderWidget(QWidget):
             f"background:transparent; font-size: 16px; font-weight: bold; "
             f"color: {constants.ACCENT_HI}; letter-spacing: 2px;"
         )
+        self.studio_label.setMaximumWidth(220)
+        self.studio_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
         self.department_filter_label = QLabel("Department:")
         self.department_filter_label.setStyleSheet(
             f"background:transparent; color: {constants.TEXT_SEC};"
         )
         self.department_filter_combobox = QComboBox()
-        self.department_filter_combobox.setFixedWidth(150)
+        self.department_filter_combobox.setMinimumWidth(90)
+        self.department_filter_combobox.setMaximumWidth(150)
         self.department_filter_combobox.addItems(constants.DEPARTMENTS)
         _arrow = str(ICONS_DIR / "arrow-down-sign-to-navigate.png").replace("\\", "/")
         _combo_style = f"""
@@ -77,7 +83,8 @@ class HeaderWidget(QWidget):
             f"background:transparent; color: {constants.TEXT_SEC};"
         )
         self.artist_filter_combobox = QComboBox()
-        self.artist_filter_combobox.setFixedWidth(150)
+        self.artist_filter_combobox.setMinimumWidth(90)
+        self.artist_filter_combobox.setMaximumWidth(150)
         self.artist_filter_combobox.addItems(constants.ARTISTS)
         self.artist_filter_combobox.setStyleSheet(_combo_style)
 
@@ -86,7 +93,9 @@ class HeaderWidget(QWidget):
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search...")
-        self.search_bar.setFixedWidth(500)
+        self.search_bar.setMinimumWidth(120)
+        self.search_bar.setMaximumWidth(400)
+        self.search_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.search_bar.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {constants.BG};
@@ -101,7 +110,8 @@ class HeaderWidget(QWidget):
         """)
 
         self.filter_comboBox = QComboBox()
-        self.filter_comboBox.setFixedWidth(160)
+        self.filter_comboBox.setMinimumWidth(100)
+        self.filter_comboBox.setMaximumWidth(160)
         self.filter_comboBox.addItems([
             "Version (High → Low)",
             "Version (Low → High)",
