@@ -44,7 +44,10 @@ class MainWindow(QMainWindow):
 
         self._splash_update(100, "Ready!")
         if is_first_run:
-            FirstRunDialog(self).exec_()
+            dlg = FirstRunDialog(self)
+            dlg.exec_()
+            # Reflect any name the user just entered in the header immediately
+            self.header_widget.update_studio_label(constants.STUDIO_NAME)
 
     def _splash_update(self, value: int, message: str) -> None:
         """Forward progress update to the splash screen if one is active."""

@@ -19,7 +19,7 @@ class FirstRunDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Welcome to BlastVault")
-        self.setFixedSize(520, 340)
+        self.setFixedSize(520, 400)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.create_widgets()
@@ -53,15 +53,35 @@ class FirstRunDialog(QDialog):
 
         # Sub-text
         self.sub_label = QLabel(
-            "Before you get started, tell BlastVault where your studio\n"
-            "files live. This is usually a network drive or shared folder\n"
-            "that everyone in the studio can access."
+            "Before you get started, give your studio a name and tell\n"
+            "BlastVault where your files live. You can change both\n"
+            "at any time in Options → Settings."
         )
         self.sub_label.setAlignment(Qt.AlignCenter)
         self.sub_label.setStyleSheet(f"""
             font-size: 12px;
             color: {constants.TEXT_SEC};
             background: transparent;
+        """)
+
+        # Studio name field
+        self.name_label = QLabel("Studio Name:")
+        self.name_label.setStyleSheet(f"color: {constants.TEXT_PRI}; background: transparent;")
+
+        self.name_lineEdit = QLineEdit()
+        self.name_lineEdit.setText(constants.STUDIO_NAME)
+        self.name_lineEdit.setPlaceholderText("e.g.  Pixar Animation Studios")
+        self.name_lineEdit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {constants.BORDER};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
+                padding: 4px 8px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {constants.ACCENT};
+            }}
         """)
 
         # Root path field
@@ -146,6 +166,11 @@ class FirstRunDialog(QDialog):
         layout.addWidget(self.sub_label)
         layout.addSpacing(8)
 
+        layout.addWidget(self.name_label)
+        layout.addWidget(self.name_lineEdit)
+
+        layout.addSpacing(4)
+
         layout.addWidget(self.root_label)
 
         path_row = QHBoxLayout()
@@ -178,6 +203,9 @@ class FirstRunDialog(QDialog):
             self.root_lineEdit.setText(path)
 
     def _on_confirm(self):
+        name = self.name_lineEdit.text().strip()
+        if name:
+            constants.STUDIO_NAME = name
         path = self.root_lineEdit.text().strip()
         if path:
             constants.ROOT_DIR = path
