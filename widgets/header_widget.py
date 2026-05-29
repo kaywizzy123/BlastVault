@@ -15,6 +15,8 @@ class HeaderWidget(QWidget):
     toggle_view        = pyqtSignal()
     search_changed     = pyqtSignal(str)
     department_changed = pyqtSignal(str)
+    artist_changed     = pyqtSignal(str)
+    sort_changed       = pyqtSignal(str)
     thumb_size_changed = pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -76,6 +78,7 @@ class HeaderWidget(QWidget):
         )
         self.artist_filter_combobox = QComboBox()
         self.artist_filter_combobox.setFixedWidth(150)
+        self.artist_filter_combobox.addItems(constants.ARTISTS)
         self.artist_filter_combobox.setStyleSheet(_combo_style)
 
         for combo in (self.department_filter_combobox, self.artist_filter_combobox):
@@ -97,7 +100,15 @@ class HeaderWidget(QWidget):
             }}
         """)
 
-        # Thumbnail size slider
+        self.filter_comboBox = QComboBox()
+        self.filter_comboBox.setFixedWidth(160)
+        self.filter_comboBox.addItems([
+            "Version (High → Low)",
+            "Version (Low → High)",
+        ])
+        self.filter_comboBox.setStyleSheet(_combo_style)
+        self.filter_comboBox.view().setFrameShape(QFrame.NoFrame)
+
 
         self.thumb_slider = QSlider(Qt.Horizontal)
         self.thumb_slider.setRange(80, 240)
@@ -136,8 +147,28 @@ class HeaderWidget(QWidget):
         self.studio_label.setText(name)
 
     def reload_departments(self):
-        self.department_filter_combobox.clear()
-        self.department_filter_combobox.addItems(constants.DEPARTMENTS)
+        cb = self.department_filter_combobox
+        cb.blockSignals(True)
+        current = cb.currentText()
+        cb.clear()
+        cb.addItems(constants.DEPARTMENTS)
+        idx = cb.findText(current)
+        cb.setCurrentIndex(idx if idx >= 0 else 0)
+        cb.blockSignals(False)
+        self.department_changed.emit(cb.currentText())
+
+    def reload_artists(self):
+        cb = self.artist_filter_combobox
+        cb.blockSignals(True)
+        current = cb.currentText()
+        cb.clear()
+        cb.addItems(constants.ARTISTS)
+        # Restore previous selection; fall back to "All" if it disappeared
+        idx = cb.findText(current)
+        cb.setCurrentIndex(idx if idx >= 0 else 0)
+        cb.blockSignals(False)
+        # Emit once so the center panel filter reflects the final selection
+        self.artist_changed.emit(cb.currentText())
 
     def create_layout(self):
         self.main_layout = QHBoxLayout(self)
@@ -147,6 +178,7 @@ class HeaderWidget(QWidget):
         self.main_layout.addStretch()
         self.main_layout.addWidget(self.search_bar)
         self.main_layout.addStretch()
+        self.main_layout.addWidget(self.filter_comboBox)
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
         sep.setFixedWidth(1)
@@ -184,6 +216,8 @@ class HeaderWidget(QWidget):
         self.refresh_btn.clicked.connect(self.on_refresh)
         self.search_bar.textChanged.connect(self.search_changed)
         self.department_filter_combobox.currentTextChanged.connect(self.department_changed)
+        self.artist_filter_combobox.currentTextChanged.connect(self.artist_changed)
+        self.filter_comboBox.currentTextChanged.connect(self.sort_changed)
         self.thumb_slider.valueChanged.connect(self._on_thumb_slider_changed)
 
     def _on_thumb_slider_changed(self, value: int):

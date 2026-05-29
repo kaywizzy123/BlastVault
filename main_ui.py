@@ -1,34 +1,55 @@
 import sys
+import time
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QSplitter, QAction,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 
 from core import constants
-from core.config import load_config
+from core.config import load_config, save_config
 from core.styles import styleSheet
 from widgets import LeftPanel, CenterPanel, RightPanel, HeaderWidget, FooterWidget
 from dialogs import SettingsDialog, AboutDialog, FirstRunDialog
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, splash=None):
         super().__init__(parent)
+        self._splash = splash
+
         self.setWindowTitle("BlastVault")
         self.setMinimumSize(900, 600)
         QApplication.instance().setStyleSheet(styleSheet)
         self.setWindowIcon(QIcon(constants.ICON))
 
+        self._splash_update(10, "Loading configuration…")
         is_first_run = not constants.CONFIG_PATH.exists()
         saved_catalogs = load_config()
+        if splash:
+            splash.set_studio_name(constants.STUDIO_NAME)
+
+        self._splash_update(35, "Building interface…")
         self.create_widgets()
+
+        self._splash_update(60, "Setting up layout…")
         self.create_layout()
+
+        self._splash_update(80, "Connecting signals…")
         self.create_connections()
+
+        self._splash_update(95, "Restoring catalogs…")
         self.left_panel.restore_catalogs(saved_catalogs)
+
+        self._splash_update(100, "Ready!")
         if is_first_run:
             FirstRunDialog(self).exec_()
+
+    def _splash_update(self, value: int, message: str) -> None:
+        """Forward progress update to the splash screen if one is active."""
+        if self._splash:
+            self._splash.set_progress(value, message)
 
     def create_widgets(self):
         # Use QMainWindow's built-in menuBar() — correctly integrated on every platform.
@@ -88,8 +109,11 @@ class MainWindow(QMainWindow):
         self.header_widget.toggle_view.connect(self.center_panel.toggle_view)
         self.header_widget.search_changed.connect(self.center_panel.filter_items)
         self.header_widget.department_changed.connect(self.center_panel.filter_department)
+        self.header_widget.artist_changed.connect(self.center_panel.filter_artist)
+        self.center_panel.artists_found.connect(self.on_artists_found)
         self.header_widget.refresh_btn.clicked.connect(self.on_refresh)
         self.header_widget.thumb_size_changed.connect(self.center_panel.set_thumb_size)
+        self.header_widget.sort_changed.connect(self.center_panel.sort_items)
         self.center_panel.items_loaded.connect(self.footer.update_items)
         self.center_panel.selection_changed.connect(self.footer.update_selection)
         self.center_panel.file_selected.connect(self.right_panel.display_metadata)
@@ -111,9 +135,27 @@ class MainWindow(QMainWindow):
         dialog.settings_changed.connect(self.on_settings_changed)
         dialog.exec_()
 
+    def on_artists_found(self, artists: list):
+        """Called every time a folder finishes loading.
+
+        - Adds any newly discovered artist tokens to ``constants.ARTISTS`` and
+          saves config so they persist across sessions.
+        - Always refreshes the artist combobox so it updates immediately in
+          the current session.
+        """
+        new = [a for a in artists if a and a not in constants.ARTISTS]
+        if new:
+            constants.ARTISTS.extend(new)
+            rest = sorted(a for a in constants.ARTISTS if a != "All")
+            constants.ARTISTS = ["All"] + rest
+            save_config()
+        # Refresh combobox on every load — new artists or not
+        self.header_widget.reload_artists()
+
     def on_settings_changed(self):
         self.header_widget.update_studio_label(constants.STUDIO_NAME)
         self.header_widget.reload_departments()
+        self.header_widget.reload_artists()
         self.left_panel.refresh_all()
         if self.center_panel.current_path:
             self.center_panel.load_folder(self.center_panel.current_path)
@@ -121,10 +163,27 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     from core.styles import qt_argv
+    from widgets.splash_screen import SplashScreen
+
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     app = QApplication(qt_argv())
     app.setStyle("Fusion")
-    window = MainWindow()
-    window.showMaximized()
+
+    splash = SplashScreen()
+    splash.show()
+    QApplication.processEvents()
+    _start = time.monotonic()
+
+    window = MainWindow(splash=splash)
+
+    # Ensure splash is visible for at least MIN_DISPLAY_MS
+    elapsed_ms  = int((time.monotonic() - _start) * 1000)
+    remaining_ms = max(0, SplashScreen.MIN_DISPLAY_MS - elapsed_ms)
+
+    def _finish():
+        splash.close()
+        window.showMaximized()
+
+    QTimer.singleShot(remaining_ms, _finish)
     sys.exit(app.exec_())

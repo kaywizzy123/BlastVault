@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap
 
 from core import constants

@@ -12,7 +12,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImageReader
 
 from core import constants, styles
-from core.constants import detect_department, version_key, file_ctime
+from core.constants import detect_department, detect_artist, version_key, file_ctime
+from core.meta import read_meta_with_fallback
 from utils.collapsible_btn import CollapsibleWidget
 
 
@@ -141,12 +142,28 @@ class RightPanel(QWidget):
             self._clear()
             return
 
+        # ── Structured metadata: .meta → .txt sidecar → filename fallback ──
+        meta = read_meta_with_fallback(p)
+
         base, ver = version_key(p.stem)
         self.file_details.setText(base if base is not None else p.stem)
-        self.version_details.setText(str(ver) if ver is not None else "")
+
+        # Version: prefer meta, fall back to filename parse
+        meta_ver = meta.get("version")
+        if meta_ver is not None:
+            self.version_details.setText(str(meta_ver))
+        else:
+            self.version_details.setText(str(ver) if ver is not None else "")
+
         self.file_path_details.setText(str(p))
-        self.department_details.setText(detect_department(p.name))
-        self.artist_details.clear()
+
+        # Department: prefer meta, fall back to filename token detection
+        self.department_details.setText(
+            meta.get("department") or detect_department(p.name)
+        )
+
+        # Artist: meta → filename convention fallback
+        self.artist_details.setText(meta.get("artist") or detect_artist(p.name))
 
         try:
             ctime = file_ctime(p)
@@ -161,12 +178,17 @@ class RightPanel(QWidget):
         except OSError:
             self.file_size_details.clear()
 
+        # Description: raw .txt content when present (preserves full text);
+        # fall back to the "description" field parsed from the sidecar by
+        # read_meta_with_fallback (strips key:value lines already consumed).
         sidecar = p.with_suffix(".txt")
         if sidecar.exists():
             try:
                 self.description_details.setText(sidecar.read_text(encoding="utf-8"))
             except Exception:
                 self.description_details.clear()
+        elif meta.get("description"):
+            self.description_details.setText(meta["description"])
         else:
             self.description_details.clear()
 

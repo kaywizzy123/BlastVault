@@ -1,6 +1,5 @@
 import re as _re
 import sys as _sys
-import shutil as _shutil
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -55,7 +54,7 @@ else:                                           # Linux / other
     ROOT_DIR    = str(Path.home() / "Shows")
     FFMPEG_PATH = "/usr/bin/ffmpeg"
 
-GRID_ICON_W    = 180          # icon width  — wider to fill 16:9 video frames
+GRID_ICON_W    = 180          # icon width  — 16:9 asset grid
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
 GRID_ICON_SIZE = GRID_ICON_W  # kept for thumbnail-loader / icon-builder compat
 GRID_CELL_SIZE = (196, 130)   # cell: slightly wider than icon + row for label
@@ -80,6 +79,8 @@ OBJ_3D_EXTS = {".fbx", ".usd", ".usda", ".usdc", ".usdz"}
 ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS | OBJ_3D_EXTS | DOC_EXTS
 
 EXCLUDED_PATTERNS = []
+
+ARTISTS: list[str] = ["All"]   # populated from config; "All" always first
 
 DEPARTMENTS = [
     "All",
@@ -142,6 +143,29 @@ def version_key(stem: str) -> tuple:
     return None, None
 
 
+def detect_artist(filename: str) -> str:
+    """Return the artist name from *filename* using the studio naming convention:
+
+        ``<name>_<dept>_<artist>_v<version>``
+
+    The artist is the last token of the version-stripped stem, provided it
+    is not itself a recognised department keyword.
+
+    Example: ``goat_fit0700_anim_oogunremi_v001.ma`` → ``"oogunremi"``
+    Returns an empty string when the pattern is not matched.
+    """
+    stem   = Path(filename).stem.lower()
+    stem   = _re.sub(r'_v\d+$', '', stem, flags=_re.IGNORECASE)
+    tokens = _SPLIT_RE.split(stem)
+    if not tokens:
+        return ""
+    last = tokens[-1]
+    # Guard: don't return a department keyword as an artist name
+    if last in DEPARTMENT_KEYWORDS:
+        return ""
+    return last
+
+
 def detect_department(filename: str) -> str:
     """Return the department for *filename* by matching tokens against DEPARTMENT_KEYWORDS.
 
@@ -172,20 +196,26 @@ def file_ctime(p: Path) -> float:
         return st.st_mtime          # Linux fallback
 
 
-def canonical_stem(base: str) -> str:
-    """Remove department keyword tokens from a version-stripped stem.
+def canonical_stem(base: str, artist: str = "") -> str:
+    """Remove department and artist tokens from a version-stripped stem.
 
-    Used to group files that share an asset name but differ only by department tag,
-    so only the highest-versioned file (across all departments) is shown per asset.
+    Used to group files that share an asset name but differ only by department
+    or artist tag, so only the latest file is shown per asset in SEQ view.
 
-    Examples:
-        ``char_hero_anim``  →  ``char_hero``
-        ``seq_010_lgt``     →  ``seq_010``
-        ``hero_cfx_v002``   →  ``hero``   (version should be stripped first)
+    Examples (with convention ``<name>_<dept>_<artist>_v###``):
+        ``char_hero_anim_oogunremi``  →  ``char_hero``
+        ``seq_010_lgt``               →  ``seq_010``
+        ``hero_cfx_v002``             →  ``hero``  (version stripped by caller)
+
+    *artist* should be the lower-cased artist token so it can be removed.
+    When omitted, only department keywords are stripped.
     """
-    tokens = _SPLIT_RE.split(base.lower())
+    tokens    = _SPLIT_RE.split(base.lower())
     dept_keys = set(DEPARTMENT_KEYWORDS.keys())
-    cleaned = [t for t in tokens if t not in dept_keys]
+    cleaned   = [t for t in tokens if t not in dept_keys]
+    # Strip the artist token when it appears at the end of the cleaned list
+    if artist and cleaned and cleaned[-1] == artist.lower():
+        cleaned = cleaned[:-1]
     result = "_".join(cleaned)
-    # Fallback: if every token was a dept keyword, keep the original
+    # Fallback: if every token was stripped, keep the original
     return result if result else base.lower()

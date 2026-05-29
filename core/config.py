@@ -12,6 +12,7 @@ def load_config():
                 constants.STUDIO_NAME = data.get("studio_name", constants.STUDIO_NAME)
                 constants.ROOT_DIR = data.get("root_dir", constants.ROOT_DIR)
                 constants.DEPARTMENTS = data.get("departments", constants.DEPARTMENTS)
+                constants.ARTISTS = data.get("artists", constants.ARTISTS)
                 return data.get("catalogs", [])
         except Exception:
             constants.EXCLUDED_PATTERNS = []
@@ -28,6 +29,7 @@ def save_config(catalog_paths=None):
         existing["studio_name"] = constants.STUDIO_NAME
         existing["root_dir"] = constants.ROOT_DIR
         existing["departments"] = constants.DEPARTMENTS
+        existing["artists"]     = constants.ARTISTS
         if catalog_paths is not None:
             existing["catalogs"] = catalog_paths
         with constants.CONFIG_PATH.open("w") as f:

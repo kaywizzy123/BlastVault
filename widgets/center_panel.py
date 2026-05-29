@@ -11,8 +11,9 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSys
 from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag
 
 from core import constants
-from core.constants import detect_department, canonical_stem, version_key
+from core.constants import detect_department, detect_artist, canonical_stem, version_key
 from core.config import is_excluded
+from core.meta import read_meta, read_folder_meta
 from core.styles import context_menu_style
 from utils.icons import (
     colored_icon, make_placeholder_icon, get_file_icon,
@@ -113,7 +114,8 @@ class CenterPanel(QWidget):
     folder_changed   = pyqtSignal(str)
     items_loaded     = pyqtSignal(int)
     selection_changed = pyqtSignal(int)
-    file_selected    = pyqtSignal(str)  # single file path, or "" if none/multi
+    file_selected    = pyqtSignal(str)   # single file path, or "" if none/multi
+    artists_found    = pyqtSignal(list)  # unique artist names in the loaded folder
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -123,6 +125,8 @@ class CenterPanel(QWidget):
         self.thumbnail_loader = None
         self._text_filter     = ""
         self._dept_filter     = "All"
+        self._sort_mode       = "version_desc"   # "name" | "version_desc" | "version_asc"
+        self._artist_filter   = "All"
         # (canonical, ext) -> {dept: Path, '_overall': Path}
         self._asset_versions: dict = {}
         self.create_widgets()
@@ -257,6 +261,24 @@ class CenterPanel(QWidget):
         self._dept_filter = dept
         self._apply_filters()
 
+    def filter_artist(self, artist: str):
+        """Filter by artist name; pass ``'All'`` to show everything."""
+        self._artist_filter = artist
+        self._apply_filters()
+
+    def sort_items(self, label: str):
+        """Change sort order and reload the current folder.
+
+        *label* must match one of the header combobox option strings.
+        """
+        _MAP = {
+            "Version (High → Low)":  "version_desc",
+            "Version (Low → High)":  "version_asc",
+        }
+        self._sort_mode = _MAP.get(label, "name")
+        if self.current_path:
+            self.load_folder(self.current_path)
+
     def toggle_view(self):
         self.is_grid_view = not self.is_grid_view
         if self.is_grid_view:
@@ -274,6 +296,42 @@ class CenterPanel(QWidget):
     # ------------------------------------------------------------------ #
     #  Folder loading                                                      #
     # ------------------------------------------------------------------ #
+
+    # ------------------------------------------------------------------ #
+    #  Sort helpers                                                        #
+    # ------------------------------------------------------------------ #
+
+    def _entry_sort_key(self, p: Path) -> tuple:
+        """Sort key for a single Path entry in _load_direct.
+
+        Folders always come before files regardless of mode.  Within each
+        group the order is determined by ``self._sort_mode``.
+        """
+        is_file = p.is_file()
+        mode    = self._sort_mode
+
+        # version_desc / version_asc
+        _, ver = version_key(p.stem)
+        if mode == "version_desc":
+            v = -ver if ver is not None else float("inf")
+        else:
+            v = ver  if ver is not None else float("inf")
+        return (is_file, v, p.name.lower())
+
+    def _seq_sort_key(self, kv) -> object:
+        """Sort key for items in _load_latest_versions.
+
+        *kv* is ``((canonical, ext), (_, path))``.
+        """
+        _, (_, p) = kv
+        mode = self._sort_mode
+
+        # version_desc / version_asc
+        _, ver = version_key(p.stem)
+        if mode == "version_desc":
+            return -ver if ver is not None else float("inf")
+        else:
+            return ver  if ver is not None else float("inf")
 
     def _load_latest_versions(self, folder: Path, icon_size: int):
         """Recursively build one item per (canonical_stem, ext) asset group.
@@ -306,7 +364,7 @@ class CenterPanel(QWidget):
 
                     base, _    = version_key(p.stem)
                     stem_base  = base if base is not None else p.stem
-                    can        = canonical_stem(stem_base)
+                    can        = canonical_stem(stem_base, detect_artist(p.name))
                     dept       = detect_department(p.name)
 
                     dept_key = (can, dept, ext)
@@ -329,25 +387,37 @@ class CenterPanel(QWidget):
 
         # One item per asset, labelled by canonical stem
         thumbnail_paths = []
-        for (can, ext), (_, p) in sorted(overall.items(), key=lambda kv: kv[1][1].name.lower()):
+        artists: set[str] = set()
+        for (can, ext), (_, p) in sorted(overall.items(), key=self._seq_sort_key):
+            meta = read_meta(p)
+            artist = meta.get("artist") or detect_artist(p.name)
+            if artist:
+                artists.add(artist)
             base, _ = version_key(p.stem)
-            label   = canonical_stem(base) if base is not None else p.stem
-            item    = self._make_file_item(label, p, ext, icon_size, thumbnail_paths)
+            artist_token = (meta.get("artist") or detect_artist(p.name)).lower()
+            label   = canonical_stem(base, artist_token) if base is not None else p.stem
+            item    = self._make_file_item(label, p, ext, icon_size, thumbnail_paths, meta)
             item.setData(Qt.UserRole + 3, (can, ext))   # SEQ asset key
             self.list_widget.addItem(item)
 
         self._start_thumbnail_loader(thumbnail_paths, icon_size)
         self._hide_loading()
         self.items_loaded.emit(self.list_widget.count())
+        self.artists_found.emit(sorted(artists))
         self._apply_filters()
 
     def _load_direct(self, folder: Path, icon_size: int):
         """Show immediate contents: subfolders first, then files."""
+        # Read all .meta files in this folder in one pass
+        folder_meta = read_folder_meta(folder)
+
         thumbnail_paths = []
+        artists: set[str] = set()
         try:
-            entries = sorted(folder.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+            entries = sorted(folder.iterdir(), key=self._entry_sort_key)
             for p in entries:
-                if p.is_dir() and is_excluded(p.name):
+                # Hide .meta subfolder and any user-excluded patterns
+                if p.is_dir() and (p.name == ".meta" or is_excluded(p.name)):
                     continue
                 ext = p.suffix.lower()
                 if p.is_file() and ext not in constants.ALLOWED_EXTS:
@@ -358,9 +428,14 @@ class CenterPanel(QWidget):
                     item.setData(Qt.UserRole,     str(p))
                     item.setData(Qt.UserRole + 1, True)
                     item.setData(Qt.UserRole + 2, "")
+                    item.setData(Qt.UserRole + 4, "")
                     item.setIcon(colored_icon(constants.ACCENT, closed=True, size=icon_size))
                 else:
-                    item = self._make_file_item(p.stem, p, ext, icon_size, thumbnail_paths)
+                    meta = folder_meta.get(p.stem, {})
+                    artist = meta.get("artist") or detect_artist(p.name)
+                    if artist:
+                        artists.add(artist)
+                    item = self._make_file_item(p.stem, p, ext, icon_size, thumbnail_paths, meta)
                 self.list_widget.addItem(item)
         except PermissionError:
             pass
@@ -368,6 +443,7 @@ class CenterPanel(QWidget):
         self._start_thumbnail_loader(thumbnail_paths, icon_size)
         self._hide_loading()
         self.items_loaded.emit(self.list_widget.count())
+        self.artists_found.emit(sorted(artists))
         self._apply_filters()
 
     # ------------------------------------------------------------------ #
@@ -377,12 +453,17 @@ class CenterPanel(QWidget):
     def _make_file_item(
         self, label: str, p: Path, ext: str,
         icon_size: int, thumbnail_paths: list,
+        meta: dict | None = None,
     ) -> QListWidgetItem:
         """Build a QListWidgetItem for a file and queue thumbnails as needed."""
+        meta = meta or {}
         item = QListWidgetItem(label)
         item.setData(Qt.UserRole,     str(p))
         item.setData(Qt.UserRole + 1, False)
-        item.setData(Qt.UserRole + 2, detect_department(p.name))
+        # Department: meta wins over filename token detection
+        item.setData(Qt.UserRole + 2, meta.get("department") or detect_department(p.name))
+        # Artist: meta → filename convention fallback
+        item.setData(Qt.UserRole + 4, meta.get("artist") or detect_artist(p.name))
 
         if ext in constants.IMAGE_EXTS:
             item.setIcon(make_placeholder_icon(constants.BORDER, icon_size, "..."))
@@ -443,8 +524,9 @@ class CenterPanel(QWidget):
 
         All other items: the dept filter hides non-matching items as usual.
         """
-        text = self._text_filter.lower()
-        dept = self._dept_filter
+        text   = self._text_filter.lower()
+        dept   = self._dept_filter
+        artist = self._artist_filter
 
         for i in range(self.list_widget.count()):
             item      = self.list_widget.item(i)
@@ -453,20 +535,21 @@ class CenterPanel(QWidget):
             asset_key = item.data(Qt.UserRole + 3)   # None for non-SEQ items
 
             if is_folder:
-                dept_ok = True
+                dept_ok = artist_ok = True
             elif asset_key is not None and asset_key in self._asset_versions:
-                # SEQ item — swap path, never hide
+                # SEQ item — swap path, never hide by dept/artist
                 versions = self._asset_versions[asset_key]
                 target   = versions.get(dept) if dept not in ("All", "") else None
                 target   = target or versions.get("_overall")
                 if target:
                     item.setData(Qt.UserRole,     str(target))
                     item.setData(Qt.UserRole + 2, detect_department(target.name))
-                dept_ok = True
+                dept_ok = artist_ok = True
             else:
-                dept_ok = dept in ("All", "") or item.data(Qt.UserRole + 2) == dept
+                dept_ok   = dept   in ("All", "") or item.data(Qt.UserRole + 2) == dept
+                artist_ok = artist in ("All", "") or item.data(Qt.UserRole + 4) == artist
 
-            item.setHidden(not (name_ok and dept_ok))
+            item.setHidden(not (name_ok and dept_ok and artist_ok))
 
     # ------------------------------------------------------------------ #
     #  Hover-preview                                                       #
