@@ -36,8 +36,6 @@ class HeaderWidget(QWidget):
             f"background:transparent; font-size: 16px; font-weight: bold; "
             f"color: {constants.ACCENT_HI}; letter-spacing: 2px;"
         )
-        self.studio_label.setMaximumWidth(220)
-        self.studio_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
         self.department_filter_label = QLabel("Department:")
         self.department_filter_label.setStyleSheet(
