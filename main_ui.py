@@ -212,51 +212,26 @@ class MainWindow(QMainWindow):
 
     def _try_unlock(self):
         """Show PIN dialog; unlock only if the correct PIN is entered."""
-        from PyQt5.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+        from dialogs.pin_dialog import PinInputDialog, PinSetupDialog
 
         if not constants.SUPERVISOR_PIN_HASH:
             # ── First time: no PIN set yet ──────────────────────────────
-            pin, ok = QInputDialog.getText(
-                self, "Set Supervisor PIN",
-                "No supervisor PIN has been set yet.\n"
-                "Enter a new PIN to enable status editing:",
-                QLineEdit.Password,
-            )
-            if not ok or not pin.strip():
+            dlg = PinSetupDialog(self)
+            pin, ok = dlg.get_pin()
+            if not ok or not pin:
                 self.header_widget.set_locked(True)
                 return
-
-            confirm, ok = QInputDialog.getText(
-                self, "Confirm PIN",
-                "Confirm your new PIN:",
-                QLineEdit.Password,
-            )
-            if not ok or confirm != pin:
-                QMessageBox.warning(
-                    self, "PIN Mismatch",
-                    "The PINs did not match. Please try again."
-                )
-                self.header_widget.set_locked(True)
-                return
-
             constants.SUPERVISOR_PIN_HASH = hashlib.sha256(pin.encode()).hexdigest()
             save_config()
 
         else:
             # ── Verify existing PIN ─────────────────────────────────────
-            pin, ok = QInputDialog.getText(
-                self, "Supervisor PIN",
-                "Enter the supervisor PIN to unlock status editing:",
-                QLineEdit.Password,
-            )
+            def _verify(pin: str) -> bool:
+                return hashlib.sha256(pin.encode()).hexdigest() == constants.SUPERVISOR_PIN_HASH
+
+            dlg = PinInputDialog(verify_fn=_verify, parent=self)
+            pin, ok = dlg.get_pin()
             if not ok:
-                self.header_widget.set_locked(True)
-                return
-            if hashlib.sha256(pin.encode()).hexdigest() != constants.SUPERVISOR_PIN_HASH:
-                QMessageBox.warning(
-                    self, "Incorrect PIN",
-                    "Incorrect PIN — status editing remains locked."
-                )
                 self.header_widget.set_locked(True)
                 return
 

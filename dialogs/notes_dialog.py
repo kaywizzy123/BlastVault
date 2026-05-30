@@ -8,12 +8,11 @@ import datetime
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
     QPushButton, QScrollArea, QWidget, QFrame, QSizePolicy,
-    QInputDialog, QLineEdit,
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QPixmap
 
 from core import constants
 from core.constants import version_key
@@ -96,6 +95,160 @@ class _NoteCard(QWidget):
 
         layout.addLayout(header_row)
         layout.addWidget(content_label)
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Author name dialog                                                            #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+class _AuthorInputDialog(QDialog):
+    """Styled dialog that prompts for the note author's name."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Note")
+        self.setFixedWidth(340)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
+        self.setStyleSheet(f"background-color: {constants.BORDER};")
+        self._author = ""
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(24, 20, 24, 20)
+        outer.setSpacing(0)
+
+        # ── Icon ─────────────────────────────────────────────────────────
+        icon_lbl = QLabel()
+        pix = QPixmap(str(constants.ICONS_DIR / "add_note.png"))
+        if not pix.isNull():
+            icon_lbl.setPixmap(
+                pix.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("background: transparent;")
+        outer.addWidget(icon_lbl)
+        outer.addSpacing(10)
+
+        # ── Title ─────────────────────────────────────────────────────────
+        title_lbl = QLabel("Add Note")
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setStyleSheet(f"""
+            font-size: 15px;
+            font-weight: bold;
+            color: {constants.TEXT_PRI};
+            background: transparent;
+        """)
+        outer.addWidget(title_lbl)
+        outer.addSpacing(4)
+
+        # ── Subtitle ──────────────────────────────────────────────────────
+        sub_lbl = QLabel("Sign your note with your name.")
+        sub_lbl.setAlignment(Qt.AlignCenter)
+        sub_lbl.setStyleSheet(f"""
+            font-size: 11px;
+            color: {constants.TEXT_SEC};
+            background: transparent;
+        """)
+        outer.addWidget(sub_lbl)
+        outer.addSpacing(16)
+
+        # ── Name field ────────────────────────────────────────────────────
+        name_lbl = QLabel("Your name")
+        name_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; background: transparent; font-size: 11px;"
+        )
+        outer.addWidget(name_lbl)
+        outer.addSpacing(4)
+
+        self._name_field = QLineEdit()
+        self._name_field.setPlaceholderText("e.g.  John Smith")
+        self._name_field.setFixedHeight(34)
+        self._name_field.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {constants.ACCENT_HI};
+            }}
+        """)
+        self._name_field.returnPressed.connect(self._on_confirm)
+        outer.addWidget(self._name_field)
+
+        # ── Error label ───────────────────────────────────────────────────
+        self._error_lbl = QLabel()
+        self._error_lbl.setAlignment(Qt.AlignCenter)
+        self._error_lbl.setFixedHeight(16)
+        self._error_lbl.setStyleSheet(
+            f"color: {constants.FAIL}; background: transparent; font-size: 11px;"
+        )
+        self._error_lbl.setVisible(False)
+        outer.addSpacing(4)
+        outer.addWidget(self._error_lbl)
+        outer.addSpacing(14)
+
+        # ── Buttons ───────────────────────────────────────────────────────
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setFixedHeight(30)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_SEC};
+                border: none;
+                border-radius: 4px;
+                padding: 4px 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_PRI};
+            }}
+        """)
+        cancel_btn.clicked.connect(self.reject)
+
+        add_btn = QPushButton("Add Note")
+        add_btn.setFixedHeight(30)
+        add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 16px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #1a95e8;
+            }}
+        """)
+        add_btn.clicked.connect(self._on_confirm)
+
+        btn_row.addWidget(cancel_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(add_btn)
+        outer.addLayout(btn_row)
+
+    def _on_confirm(self):
+        name = self._name_field.text().strip()
+        if not name:
+            self._error_lbl.setText("Please enter your name.")
+            self._error_lbl.setVisible(True)
+            return
+        self._author = name
+        self.accept()
+
+    def get_author(self):
+        """Run the dialog. Returns ``(author, True)`` on accept, ``("", False)`` on cancel."""
+        result = self.exec_()
+        return (self._author, result == QDialog.Accepted)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -249,14 +402,11 @@ class NotesDialog(QDialog):
         if not content:
             return
 
-        author, ok = QInputDialog.getText(
-            self, "Your Name",
-            "Enter your name:",
-            QLineEdit.Normal,
-        )
-        if not ok or not author.strip():
+        dlg = _AuthorInputDialog(self)
+        author, ok = dlg.get_author()
+        if not ok:
             return
 
-        add_note(self._file_path, author.strip(), content)
+        add_note(self._file_path, author, content)
         self._note_input.clear()
         self._load_notes()
