@@ -173,7 +173,7 @@ class HeaderWidget(QWidget):
         self.lock_btn.setFixedSize(28, 28)
         self.lock_btn.setIconSize(QSize(20, 20))
         self.lock_btn.setCursor(Qt.PointingHandCursor)
-        self.lock_btn.setToolTip("Status locked  —  click to unlock (supervisor)")
+        self.lock_btn.setToolTip("Status locked  —  click to unlock (admin)")
         self.lock_btn.setStyleSheet(header_btn_style())
 
     def update_studio_label(self, name):
@@ -279,7 +279,7 @@ class HeaderWidget(QWidget):
         icon_name = "lock.png" if locked else "unlock.png"
         self.lock_btn.setIcon(QIcon(str(ICONS_DIR / icon_name)))
         self.lock_btn.setToolTip(
-            "Status locked  —  click to unlock (supervisor)" if locked
+            "Status locked  —  click to unlock (admin)" if locked
             else "Status unlocked  —  click to lock"
         )
 

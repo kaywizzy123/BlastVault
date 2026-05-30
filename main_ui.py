@@ -193,7 +193,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     # ------------------------------------------------------------------ #
-    #  Supervisor lock                                                     #
+    #  Admin lock                                                          #
     # ------------------------------------------------------------------ #
 
     def _on_lock_toggled(self, locked: bool):
@@ -214,20 +214,20 @@ class MainWindow(QMainWindow):
         """Show PIN dialog; unlock only if the correct PIN is entered."""
         from dialogs.pin_dialog import PinInputDialog, PinSetupDialog
 
-        if not constants.SUPERVISOR_PIN_HASH:
+        if not constants.ADMIN_PIN_HASH:
             # ── First time: no PIN set yet ──────────────────────────────
             dlg = PinSetupDialog(self)
             pin, ok = dlg.get_pin()
             if not ok or not pin:
                 self.header_widget.set_locked(True)
                 return
-            constants.SUPERVISOR_PIN_HASH = hashlib.sha256(pin.encode()).hexdigest()
+            constants.ADMIN_PIN_HASH = hashlib.sha256(pin.encode()).hexdigest()
             save_config()
 
         else:
             # ── Verify existing PIN ─────────────────────────────────────
             def _verify(pin: str) -> bool:
-                return hashlib.sha256(pin.encode()).hexdigest() == constants.SUPERVISOR_PIN_HASH
+                return hashlib.sha256(pin.encode()).hexdigest() == constants.ADMIN_PIN_HASH
 
             dlg = PinInputDialog(verify_fn=_verify, parent=self)
             pin, ok = dlg.get_pin()

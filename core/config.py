@@ -21,7 +21,12 @@ def load_config():
             ]
             constants.ARTISTS           = data.get("artists",      constants.ARTISTS)
 
-            constants.SUPERVISOR_PIN_HASH = data.get("supervisor_pin_hash", "")
+            # "admin_pin_hash" is the current key; fall back to the old
+            # "supervisor_pin_hash" key so existing configs migrate silently.
+            constants.ADMIN_PIN_HASH = (
+                data.get("admin_pin_hash")
+                or data.get("supervisor_pin_hash", "")
+            )
 
             # Tools
             if "blast_player_path" in data:
@@ -57,7 +62,8 @@ def save_config(catalog_paths=None):
         existing["departments"]       = constants.DEPARTMENTS
         existing["artists"]           = constants.ARTISTS
         existing["blast_player_path"]   = str(constants.BLAST_PLAYER_PATH)
-        existing["supervisor_pin_hash"] = constants.SUPERVISOR_PIN_HASH
+        existing["admin_pin_hash"] = constants.ADMIN_PIN_HASH
+        existing.pop("supervisor_pin_hash", None)   # remove legacy key
         # ffmpeg_path is intentionally NOT saved — it is auto-detected at
         # startup via shutil.which so it always reflects the current machine.
         existing.pop("ffmpeg_path", None)   # clean up any legacy value

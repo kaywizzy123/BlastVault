@@ -1,4 +1,5 @@
 import sys
+import hashlib
 import subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -8,7 +9,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QVBoxLayout, QHBoxLayout, QAbstractItemView,
     QFileDialog, QTabWidget, QWidget, QFrame,
 )
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt5.QtGui import QIcon
 
 from core import constants
@@ -214,6 +215,24 @@ class SettingsDialog(QDialog):
         self.player_browse_btn.setToolTip("Browse for BlastPlayer main.py")
         self.player_browse_btn.setStyleSheet(self._btn_style())
 
+        # ── Security section ─────────────────────────────────────────────
+        self.security_section_label = QLabel("Security")
+        self.security_section_label.setStyleSheet(self._section_style())
+
+        self.security_hint_label = QLabel(
+            "The admin PIN protects status editing.\n"
+            "Anyone with the PIN can unlock status controls."
+        )
+        self.security_hint_label.setStyleSheet(self._hint_style())
+
+        _has_pin = bool(constants.ADMIN_PIN_HASH)
+        self.change_pin_btn = QPushButton("Change PIN" if _has_pin else "Set PIN")
+        self.change_pin_btn.setStyleSheet(self._btn_style())
+
+        self.remove_pin_btn = QPushButton("Remove PIN")
+        self.remove_pin_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+        self.remove_pin_btn.setVisible(_has_pin)
+
         # ── Shared action buttons ────────────────────────────────────────
         self.import_btn = QPushButton("Import Config…")
         self.import_btn.setStyleSheet(self._btn_style())
@@ -261,6 +280,22 @@ class SettingsDialog(QDialog):
         gen.addLayout(pattern_row)
 
         gen.addWidget(self.remove_btn)
+
+        sec_sep = QFrame()
+        sec_sep.setFrameShape(QFrame.HLine)
+        sec_sep.setFixedHeight(1)
+        sec_sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
+        gen.addWidget(sec_sep)
+
+        gen.addWidget(self.security_section_label)
+        gen.addWidget(self.security_hint_label)
+
+        pin_row = QHBoxLayout()
+        pin_row.setSpacing(8)
+        pin_row.addWidget(self.change_pin_btn)
+        pin_row.addWidget(self.remove_pin_btn)
+        pin_row.addStretch()
+        gen.addLayout(pin_row)
         gen.addStretch()
 
         # ── Departments tab ──────────────────────────────────────────────
@@ -422,6 +457,10 @@ class SettingsDialog(QDialog):
         self.ffmpeg_test_btn.clicked.connect(self._on_test_ffmpeg)
         self.player_browse_btn.clicked.connect(self._on_browse_player)
 
+        # Security
+        self.change_pin_btn.clicked.connect(self._on_change_pin)
+        self.remove_pin_btn.clicked.connect(self._on_remove_pin)
+
         # Dialog buttons
         self.import_btn.clicked.connect(self._on_import_config)
         self.export_btn.clicked.connect(self._on_export_config)
@@ -461,7 +500,7 @@ class SettingsDialog(QDialog):
 
     def _on_dept_add(self):
         text = self.dept_input.text().strip()
-        if not text:
+        if not text or text.lower() == "all":
             return
         existing = [
             self.dept_list.item(i).text()
@@ -497,7 +536,7 @@ class SettingsDialog(QDialog):
 
     def _on_artist_add(self):
         text = self.artist_input.text().strip().lower()
-        if not text:
+        if not text or text == "all":
             return
         existing = [
             self.artist_list.item(i).text()
@@ -585,12 +624,14 @@ class SettingsDialog(QDialog):
             return
         if export_config(dest):
             self.export_btn.setText("Exported ✓")
-            from PyQt5.QtCore import QTimer
             QTimer.singleShot(2000, lambda: self.export_btn.setText("Export Config…"))
         else:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Export failed",
-                                "Could not write the config file to that location.")
+            self.export_btn.setText("Export Failed ✗")
+            self.export_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+            def _reset_export():
+                self.export_btn.setText("Export Config…")
+                self.export_btn.setStyleSheet(self._btn_style())
+            QTimer.singleShot(3000, _reset_export)
 
     def _on_import_config(self):
         src, _ = QFileDialog.getOpenFileName(
@@ -611,9 +652,12 @@ class SettingsDialog(QDialog):
             self.ffmpeg_status_lbl.setText("")
             self.settings_changed.emit()
         else:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Import failed",
-                                "Could not read the selected config file.")
+            self.import_btn.setText("Import Failed ✗")
+            self.import_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+            def _reset_import():
+                self.import_btn.setText("Import Config…")
+                self.import_btn.setStyleSheet(self._btn_style())
+            QTimer.singleShot(3000, _reset_import)
 
     # ------------------------------------------------------------------ #
     #  Save                                                                #
@@ -652,6 +696,68 @@ class SettingsDialog(QDialog):
         save_config()
         self.settings_changed.emit()
         self.accept()
+
+    # ------------------------------------------------------------------ #
+    #  PIN management                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _on_change_pin(self):
+        from dialogs.pin_dialog import PinInputDialog, PinSetupDialog
+
+        if constants.ADMIN_PIN_HASH:
+            # Verify current PIN first
+            def _verify(pin: str) -> bool:
+                return hashlib.sha256(pin.encode()).hexdigest() == constants.ADMIN_PIN_HASH
+
+            dlg = PinInputDialog(
+                title="Verify Current PIN",
+                subtitle="Enter your current PIN before setting a new one.",
+                verify_fn=_verify,
+                parent=self,
+            )
+            _, ok = dlg.get_pin()
+            if not ok:
+                return
+
+        setup = PinSetupDialog(self)
+        new_pin, ok = setup.get_pin()
+        if not ok or not new_pin:
+            return
+
+        constants.ADMIN_PIN_HASH = hashlib.sha256(new_pin.encode()).hexdigest()
+        save_config()
+        self._update_pin_buttons()
+        self.change_pin_btn.setText("PIN Updated ✓")
+        QTimer.singleShot(2000, lambda: self.change_pin_btn.setText("Change PIN"))
+
+    def _on_remove_pin(self):
+        from dialogs.pin_dialog import PinInputDialog
+
+        if not constants.ADMIN_PIN_HASH:
+            return
+
+        def _verify(pin: str) -> bool:
+            return hashlib.sha256(pin.encode()).hexdigest() == constants.ADMIN_PIN_HASH
+
+        dlg = PinInputDialog(
+            title="Remove PIN",
+            subtitle="Enter your PIN to confirm.\nThis will disable the admin lock.",
+            verify_fn=_verify,
+            parent=self,
+        )
+        _, ok = dlg.get_pin()
+        if not ok:
+            return
+
+        constants.ADMIN_PIN_HASH = ""
+        constants.STATUS_LOCKED = True
+        save_config()
+        self._update_pin_buttons()
+
+    def _update_pin_buttons(self):
+        has_pin = bool(constants.ADMIN_PIN_HASH)
+        self.change_pin_btn.setText("Change PIN" if has_pin else "Set PIN")
+        self.remove_pin_btn.setVisible(has_pin)
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                             #
@@ -698,7 +804,7 @@ class SettingsDialog(QDialog):
         """
 
     def _btn_style(self, hover_color: str = None) -> str:
-        hover = hover_color or constants.BORDER
+        hover = hover_color or constants.ACCENT
         return f"""
             QPushButton {{
                 background-color: {constants.SPLITTER_COLOR};

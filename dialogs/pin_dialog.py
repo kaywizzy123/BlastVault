@@ -1,5 +1,5 @@
 """
-pin_dialog.py — Styled supervisor PIN dialogs.
+pin_dialog.py — Styled admin PIN dialogs.
 
 PinInputDialog  — single-field, enter & optionally verify a PIN.
 PinSetupDialog  — two-field, create a new PIN (both fields must match).
@@ -201,8 +201,8 @@ class PinInputDialog(_PinBase):
 
     def __init__(
         self,
-        title="Supervisor PIN",
-        subtitle="Enter the supervisor PIN to unlock status editing.",
+        title="Admin PIN",
+        subtitle="Enter the admin PIN to unlock status editing.",
         verify_fn=None,
         parent=None,
     ):
@@ -238,8 +238,8 @@ class PinSetupDialog(_PinBase):
 
     def __init__(self, parent=None):
         super().__init__(
-            "Set Supervisor PIN",
-            "No supervisor PIN has been set.\n"
+            "Set Admin PIN",
+            "No admin PIN has been set.\n"
             "Create a PIN to enable status editing.",
             parent,
         )

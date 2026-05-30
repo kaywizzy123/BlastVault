@@ -85,9 +85,9 @@ WINDOW_MAXIMIZED: bool  = True
 WINDOW_GEOMETRY:  tuple = ()    # (x, y, w, h) — empty → default (maximised)
 SPLITTER_SIZES:   list  = []    # empty → use hardcoded defaults in MainWindow
 
-# Supervisor PIN (SHA-256 hex digest).  Empty string = no PIN set yet.
-SUPERVISOR_PIN_HASH: str = ""
-# Runtime lock state — True = locked (default), False = supervisor unlocked.
+# Admin PIN (SHA-256 hex digest).  Empty string = no PIN set yet.
+ADMIN_PIN_HASH: str = ""
+# Runtime lock state — True = locked (default), False = admin unlocked.
 STATUS_LOCKED: bool = True
 
 GRID_ICON_W    = 180          # icon width  — 16:9 asset grid

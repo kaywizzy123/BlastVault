@@ -1,7 +1,7 @@
 """
 NotesDialog — per-asset review notes viewer / editor.
 
-Everyone can read notes.  Only supervisors (unlocked state) can add notes.
+Everyone can read notes.  Only admins (unlocked state) can add notes.
 Author name is prompted each time a note is submitted.
 """
 import datetime
@@ -271,6 +271,11 @@ class NotesDialog(QDialog):
         self.resize(480, 520)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
+        # Remove the ? help button; allow the user to maximise the window
+        self.setWindowFlags(
+            (self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            | Qt.WindowMaximizeButtonHint
+        )
 
         self._build_ui()
         self._load_notes()
@@ -307,7 +312,7 @@ class NotesDialog(QDialog):
         sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
         main.addWidget(sep)
 
-        # ── Input area (supervisor only) / locked message ────────────────
+        # ── Input area (admin only) / locked message ─────────────────────
         if not constants.STATUS_LOCKED:
             self._note_input = QTextEdit()
             self._note_input.setPlaceholderText("Write a note…")
@@ -380,7 +385,7 @@ class NotesDialog(QDialog):
             )
             self._cards_layout.addWidget(empty)
         else:
-            # Pass delete callback to each card only when supervisor is unlocked
+            # Pass delete callback to each card only when admin is unlocked
             on_del = self._on_delete_note if not constants.STATUS_LOCKED else None
             for note in reversed(notes):   # newest first
                 self._cards_layout.addWidget(_NoteCard(note, on_delete=on_del))
