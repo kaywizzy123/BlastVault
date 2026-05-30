@@ -17,6 +17,8 @@ def load_config():
             constants.DEPARTMENTS       = data.get("departments",  constants.DEPARTMENTS)
             constants.ARTISTS           = data.get("artists",      constants.ARTISTS)
 
+            constants.SUPERVISOR_PIN_HASH = data.get("supervisor_pin_hash", "")
+
             # Tools
             if "blast_player_path" in data:
                 constants.BLAST_PLAYER_PATH = Path(data["blast_player_path"])
@@ -50,7 +52,8 @@ def save_config(catalog_paths=None):
         existing["root_dir"]          = constants.ROOT_DIR
         existing["departments"]       = constants.DEPARTMENTS
         existing["artists"]           = constants.ARTISTS
-        existing["blast_player_path"] = str(constants.BLAST_PLAYER_PATH)
+        existing["blast_player_path"]   = str(constants.BLAST_PLAYER_PATH)
+        existing["supervisor_pin_hash"] = constants.SUPERVISOR_PIN_HASH
         # ffmpeg_path is intentionally NOT saved — it is auto-detected at
         # startup via shutil.which so it always reflects the current machine.
         existing.pop("ffmpeg_path", None)   # clean up any legacy value

@@ -1,5 +1,6 @@
 import sys
 import time
+import hashlib
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QSplitter, QAction,
@@ -123,6 +124,10 @@ class MainWindow(QMainWindow):
         self.center_panel.selection_changed.connect(self.footer.update_selection)
         self.center_panel.file_selected.connect(self.right_panel.display_metadata)
         self.right_panel.status_changed.connect(self.center_panel.update_item_status)
+        self.header_widget.lock_toggled.connect(self._on_lock_toggled)
+        # Apply initial locked state to both panels
+        self.center_panel.set_status_locked(True)
+        self.right_panel.set_status_locked(True)
         self.center_panel.filters_cleared.connect(self.on_filters_cleared)
         self.header_widget.status_changed.connect(self.center_panel.filter_status)
 
@@ -185,6 +190,80 @@ class MainWindow(QMainWindow):
             constants.WINDOW_GEOMETRY = (geo.x(), geo.y(), geo.width(), geo.height())
         save_config()
         super().closeEvent(event)
+
+    # ------------------------------------------------------------------ #
+    #  Supervisor lock                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _on_lock_toggled(self, locked: bool):
+        """Called when the padlock button is clicked.
+
+        *locked = True*  → user wants to re-lock (no PIN needed).
+        *locked = False* → user wants to unlock (PIN required).
+        """
+        if locked:
+            constants.STATUS_LOCKED = True
+            self.header_widget.set_locked(True)
+            self.center_panel.set_status_locked(True)
+            self.right_panel.set_status_locked(True)
+        else:
+            self._try_unlock()
+
+    def _try_unlock(self):
+        """Show PIN dialog; unlock only if the correct PIN is entered."""
+        from PyQt5.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+
+        if not constants.SUPERVISOR_PIN_HASH:
+            # ── First time: no PIN set yet ──────────────────────────────
+            pin, ok = QInputDialog.getText(
+                self, "Set Supervisor PIN",
+                "No supervisor PIN has been set yet.\n"
+                "Enter a new PIN to enable status editing:",
+                QLineEdit.Password,
+            )
+            if not ok or not pin.strip():
+                self.header_widget.set_locked(True)
+                return
+
+            confirm, ok = QInputDialog.getText(
+                self, "Confirm PIN",
+                "Confirm your new PIN:",
+                QLineEdit.Password,
+            )
+            if not ok or confirm != pin:
+                QMessageBox.warning(
+                    self, "PIN Mismatch",
+                    "The PINs did not match. Please try again."
+                )
+                self.header_widget.set_locked(True)
+                return
+
+            constants.SUPERVISOR_PIN_HASH = hashlib.sha256(pin.encode()).hexdigest()
+            save_config()
+
+        else:
+            # ── Verify existing PIN ─────────────────────────────────────
+            pin, ok = QInputDialog.getText(
+                self, "Supervisor PIN",
+                "Enter the supervisor PIN to unlock status editing:",
+                QLineEdit.Password,
+            )
+            if not ok:
+                self.header_widget.set_locked(True)
+                return
+            if hashlib.sha256(pin.encode()).hexdigest() != constants.SUPERVISOR_PIN_HASH:
+                QMessageBox.warning(
+                    self, "Incorrect PIN",
+                    "Incorrect PIN — status editing remains locked."
+                )
+                self.header_widget.set_locked(True)
+                return
+
+        # ── PIN verified (or freshly created) — unlock ──────────────────
+        constants.STATUS_LOCKED = False
+        self.header_widget.set_locked(False)
+        self.center_panel.set_status_locked(False)
+        self.right_panel.set_status_locked(False)
 
     def _prune_thumb_cache(self):
         """Prune old thumbnail cache entries in a daemon background thread."""

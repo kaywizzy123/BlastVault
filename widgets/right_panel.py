@@ -211,6 +211,13 @@ class RightPanel(QWidget):
     #  Public API                                                          #
     # ------------------------------------------------------------------ #
 
+    def set_status_locked(self, locked: bool):
+        """Enable or disable the status combo (supervisor lock)."""
+        self.status_combo.setEnabled(not locked)
+        self.status_combo.setToolTip(
+            "Status locked  —  unlock via the padlock in the header" if locked else ""
+        )
+
     def display_metadata(self, path: str):
         """Populate the panel with metadata for *path*. Clears if empty/invalid."""
         if not path:

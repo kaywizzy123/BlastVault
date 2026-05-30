@@ -42,7 +42,8 @@
     "telnaghia",
     "tharvard",
     "thavard",
-    "tswift"
+    "tswift",
+    "gakpan"
   ],
   "blast_player_path": "C:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastPlayer\\main.py",
   "window_geometry": {
@@ -56,5 +57,6 @@
     573,
     2317,
     546
-  ]
+  ],
+  "supervisor_pin_hash": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5"
 }

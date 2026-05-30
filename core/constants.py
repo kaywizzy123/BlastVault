@@ -85,6 +85,9 @@ WINDOW_MAXIMIZED: bool  = True
 WINDOW_GEOMETRY:  tuple = ()    # (x, y, w, h) — empty → default (maximised)
 SPLITTER_SIZES:   list  = []    # empty → use hardcoded defaults in MainWindow
 
+# Supervisor PIN (SHA-256 hex digest).  Empty string = no PIN set yet.
+SUPERVISOR_PIN_HASH: str = ""
+
 GRID_ICON_W    = 180          # icon width  — 16:9 asset grid
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
 GRID_ICON_SIZE = GRID_ICON_W  # kept for thumbnail-loader / icon-builder compat

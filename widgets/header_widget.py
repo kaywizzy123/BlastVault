@@ -22,6 +22,7 @@ class HeaderWidget(QWidget):
     status_changed     = pyqtSignal(str)
     sort_changed       = pyqtSignal(str)
     thumb_size_changed = pyqtSignal(int)
+    lock_toggled       = pyqtSignal(bool)  # True = locked, False = unlocked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -165,6 +166,16 @@ class HeaderWidget(QWidget):
         self.refresh_btn.setIconSize(QSize(20, 20))
         self.refresh_btn.setStyleSheet(header_btn_style())
 
+        self.lock_btn = QPushButton()
+        self.lock_btn.setIcon(QIcon(str(ICONS_DIR / "lock.png")))
+        self.lock_btn.setCheckable(True)
+        self.lock_btn.setChecked(True)   # starts locked
+        self.lock_btn.setFixedSize(28, 28)
+        self.lock_btn.setIconSize(QSize(20, 20))
+        self.lock_btn.setCursor(Qt.PointingHandCursor)
+        self.lock_btn.setToolTip("Status locked  —  click to unlock (supervisor)")
+        self.lock_btn.setStyleSheet(header_btn_style())
+
     def update_studio_label(self, name):
         self.studio_label.setText(name)
 
@@ -235,6 +246,15 @@ class HeaderWidget(QWidget):
         self.main_layout.addWidget(self.toggle_view_btn)
         self.main_layout.addWidget(self.refresh_btn)
 
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(
+            f"background-color: {constants.SPLITTER_COLOR}; margin: 8px 2px;"
+        )
+        self.main_layout.addWidget(sep)
+        self.main_layout.addWidget(self.lock_btn)
+
     def create_connections(self):
         self.toggle_view_btn.clicked.connect(self.on_toggle_view)
         self.refresh_btn.clicked.connect(self.on_refresh)
@@ -244,6 +264,24 @@ class HeaderWidget(QWidget):
         self.status_filter_combobox.currentTextChanged.connect(self.status_changed)
         self.filter_comboBox.currentTextChanged.connect(self.sort_changed)
         self.thumb_slider.valueChanged.connect(self._on_thumb_slider_changed)
+        self.lock_btn.clicked.connect(self._on_lock_clicked)
+
+    def _on_lock_clicked(self, checked: bool):
+        # checked = True  → button is now in the "down/checked" state → locked
+        # checked = False → button unchecked → user wants to unlock
+        self.lock_toggled.emit(checked)
+
+    def set_locked(self, locked: bool):
+        """Update the padlock button to reflect the given lock state."""
+        self.lock_btn.blockSignals(True)
+        self.lock_btn.setChecked(locked)
+        self.lock_btn.blockSignals(False)
+        icon_name = "lock.png" if locked else "unlock.png"
+        self.lock_btn.setIcon(QIcon(str(ICONS_DIR / icon_name)))
+        self.lock_btn.setToolTip(
+            "Status locked  —  click to unlock (supervisor)" if locked
+            else "Status unlocked  —  click to lock"
+        )
 
     def _on_thumb_slider_changed(self, value: int):
         self.thumb_slider.setToolTip(f"{value}px")

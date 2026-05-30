@@ -175,6 +175,7 @@ class CenterPanel(QWidget):
         self._sort_mode       = "version_desc"   # "name" | "version_desc" | "version_asc"
         self._artist_filter   = "All"
         self._status_filter   = "All"
+        self._status_locked   = True    # True until supervisor unlocks
         # (canonical, ext) -> {dept: Path, '_overall': Path}
         self._asset_versions: dict = {}
         self.create_widgets()
@@ -363,6 +364,10 @@ class CenterPanel(QWidget):
             self._load_latest_versions(folder, icon_size)
         else:
             self._load_direct(folder, icon_size)
+
+    def set_status_locked(self, locked: bool):
+        """Enable or disable status editing in the context menu."""
+        self._status_locked = locked
 
     def update_item_status(self, path: str, status: str):
         """Update the status badge for *path* without reloading the folder.
@@ -1002,17 +1007,18 @@ class CenterPanel(QWidget):
                     player_act = menu.addAction("Open in BlastPlayer")
                     player_act.triggered.connect(lambda: self._open_in_blast_player(path))
 
-                # ── Set Status submenu ───────────────────────────────────
-                menu.addSeparator()
-                status_menu = menu.addMenu("Set Status")
-                for _s in constants.STATUS_OPTIONS:
-                    _act = status_menu.addAction(_s)
-                    _act.triggered.connect(
-                        lambda *_, s=_s: self._set_status([item], s)
-                    )
-                status_menu.addSeparator()
-                clear_act = status_menu.addAction("Clear Status")
-                clear_act.triggered.connect(lambda: self._set_status([item], ""))
+                # ── Set Status submenu (supervisor only) ─────────────────
+                if not self._status_locked:
+                    menu.addSeparator()
+                    status_menu = menu.addMenu("Set Status")
+                    for _s in constants.STATUS_OPTIONS:
+                        _act = status_menu.addAction(_s)
+                        _act.triggered.connect(
+                            lambda *_, s=_s: self._set_status([path], s)
+                        )
+                    status_menu.addSeparator()
+                    clear_act = status_menu.addAction("Clear Status")
+                    clear_act.triggered.connect(lambda: self._set_status([path], ""))
 
                 menu.addSeparator()
                 if sys.platform == "win32":
@@ -1029,36 +1035,45 @@ class CenterPanel(QWidget):
                 lambda: self._copy_to_clipboard("\n".join(paths))
             )
 
-            # Set Status for all selected *files* (skip folders)
-            file_items = [it for it in items if not it.data(Qt.UserRole + 1)]
-            if file_items:
+            # Set Status for all selected *files* — supervisor only
+            file_paths = [
+                it.data(Qt.UserRole)
+                for it in items
+                if not it.data(Qt.UserRole + 1)   # exclude folders
+            ]
+            if file_paths and not self._status_locked:
                 menu.addSeparator()
-                status_menu = menu.addMenu(f"Set Status  ({len(file_items)} files)")
+                status_menu = menu.addMenu(f"Set Status  ({len(file_paths)} files)")
                 for _s in constants.STATUS_OPTIONS:
                     _act = status_menu.addAction(_s)
                     _act.triggered.connect(
-                        lambda *_, s=_s: self._set_status(file_items, s)
+                        lambda *_, s=_s: self._set_status(file_paths, s)
                     )
                 status_menu.addSeparator()
                 clear_act = status_menu.addAction("Clear Status")
-                clear_act.triggered.connect(lambda: self._set_status(file_items, ""))
+                clear_act.triggered.connect(lambda: self._set_status(file_paths, ""))
 
         menu.exec_(self.list_widget.viewport().mapToGlobal(pos))
 
     def _copy_to_clipboard(self, text: str):
         QApplication.clipboard().setText(text)
 
-    def _set_status(self, items: list, status: str):
-        """Write *status* to each item's .meta file and refresh the badge.
+    def _set_status(self, paths: list, status: str):
+        """Write *status* to each file in *paths* and refresh the badge.
+
+        *paths* is a list of absolute path strings captured at menu-build
+        time — never QListWidgetItem references, which can be deleted by a
+        folder reload while the context menu is still open.
 
         *status* is one of STATUS_OPTIONS, or ``""`` to clear.
-        Changes take effect immediately in the list (no reload needed).
         """
-        for item in items:
-            path = item.data(Qt.UserRole)
-            if not path:
+        path_set = set(paths)
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            p_str = item.data(Qt.UserRole)
+            if p_str not in path_set:
                 continue
-            p = Path(path)
+            p = Path(p_str)
             try:
                 data = read_meta(p)
                 if status:
@@ -1074,10 +1089,9 @@ class CenterPanel(QWidget):
         # Force the delegate to repaint every visible item — Qt does not
         # automatically redraw for custom UserRole changes.
         self.list_widget.viewport().update()
-        # If the right panel is showing one of the files we just changed,
-        # re-emit file_selected so its status combo/badge refreshes too.
+        # If the right panel is showing one of the changed files, refresh it
         selected = self.list_widget.selectedItems()
-        if len(selected) == 1 and selected[0] in items:
+        if len(selected) == 1 and selected[0].data(Qt.UserRole) in path_set:
             self.file_selected.emit(selected[0].data(Qt.UserRole))
 
     def _open_in_blast_player(self, path: str):
