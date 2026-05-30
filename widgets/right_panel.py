@@ -161,9 +161,10 @@ class RightPanel(QWidget):
         info_form = QFormLayout()
         info_form.setContentsMargins(10, 4, 10, 4)
         info_form.setSpacing(4)
+        self._status_label = QLabel("Status:")
         for label_text, widget in (
             ("File Name:",   self.file_details),
-            ("Status:",      self._status_row_widget),
+            (self._status_label, self._status_row_widget),
             ("Department:",  self.department_details),
             ("Artist:",      self.artist_details),
             ("Version:",     self.version_details),
@@ -172,7 +173,10 @@ class RightPanel(QWidget):
             ("Description:", self.description_details),
             ("File Path:",   self.file_path_details),
         ):
-            info_form.addRow(QLabel(label_text), widget)
+            if isinstance(label_text, str):
+                info_form.addRow(QLabel(label_text), widget)
+            else:
+                info_form.addRow(label_text, widget)
         self.file_details_widget.add_layout(info_form)
 
         # ── Media Details form ───────────────────────────────────────────
@@ -217,6 +221,11 @@ class RightPanel(QWidget):
         self.status_combo.setToolTip(
             "Status locked  —  unlock via the padlock in the header" if locked else ""
         )
+
+    def set_seq_mode(self, is_seq: bool):
+        """Hide the status row when showing a SEQ-level item."""
+        self._status_label.setVisible(not is_seq)
+        self._status_row_widget.setVisible(not is_seq)
 
     def display_metadata(self, path: str):
         """Populate the panel with metadata for *path*. Clears if empty/invalid."""

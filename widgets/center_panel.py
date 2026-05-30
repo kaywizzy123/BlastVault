@@ -371,6 +371,7 @@ class CenterPanel(QWidget):
     items_loaded      = pyqtSignal(int)
     selection_changed = pyqtSignal(int)
     file_selected     = pyqtSignal(str)   # single file path, or "" if none/multi
+    seq_item_selected = pyqtSignal(bool)  # True when selected item is SEQ-level
     artists_found     = pyqtSignal(list)  # unique artist names in the loaded folder
     filters_cleared   = pyqtSignal()      # emitted when the "Clear filters" button is clicked
 
@@ -890,8 +891,11 @@ class CenterPanel(QWidget):
         selected = self.list_widget.selectedItems()
         self.selection_changed.emit(len(selected))
         if len(selected) == 1 and not selected[0].data(Qt.UserRole + 1):
+            is_seq = selected[0].data(Qt.UserRole + 3) is not None
+            self.seq_item_selected.emit(is_seq)
             self.file_selected.emit(selected[0].data(Qt.UserRole))
         else:
+            self.seq_item_selected.emit(False)
             self.file_selected.emit("")
 
     def on_item_double_clicked(self, item):
@@ -1245,8 +1249,9 @@ class CenterPanel(QWidget):
                     player_act = menu.addAction("Open in BlastPlayer")
                     player_act.triggered.connect(lambda: self._open_in_blast_player(path))
 
-                # ── Set Status submenu (supervisor only) ─────────────────
-                if not self._status_locked:
+                # ── Set Status submenu (supervisor only, not SEQ level) ──
+                is_seq = asset_key is not None
+                if not self._status_locked and not is_seq:
                     menu.addSeparator()
                     status_menu = menu.addMenu("Set Status")
                     for _s in constants.STATUS_OPTIONS:
@@ -1274,10 +1279,12 @@ class CenterPanel(QWidget):
             )
 
             # Set Status for all selected *files* — supervisor only
+            # Exclude folders (UserRole+1) and SEQ items (UserRole+3)
             file_paths = [
                 it.data(Qt.UserRole)
                 for it in items
-                if not it.data(Qt.UserRole + 1)   # exclude folders
+                if not it.data(Qt.UserRole + 1)       # exclude folders
+                and it.data(Qt.UserRole + 3) is None  # exclude SEQ items
             ]
             if file_paths and not self._status_locked:
                 menu.addSeparator()
