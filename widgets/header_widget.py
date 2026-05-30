@@ -19,6 +19,7 @@ class HeaderWidget(QWidget):
     search_changed     = pyqtSignal(str)
     department_changed = pyqtSignal(str)
     artist_changed     = pyqtSignal(str)
+    status_changed     = pyqtSignal(str)
     sort_changed       = pyqtSignal(str)
     thumb_size_changed = pyqtSignal(int)
 
@@ -86,7 +87,20 @@ class HeaderWidget(QWidget):
         self.artist_filter_combobox.addItems(constants.ARTISTS)
         self.artist_filter_combobox.setStyleSheet(_combo_style)
 
-        for combo in (self.department_filter_combobox, self.artist_filter_combobox):
+        self.status_filter_label = QLabel("Status:")
+        self.status_filter_label.setStyleSheet(
+            f"background:transparent; color: {constants.TEXT_SEC};"
+        )
+        self.status_filter_combobox = QComboBox()
+        self.status_filter_combobox.setMinimumWidth(80)
+        self.status_filter_combobox.setMaximumWidth(120)
+        self.status_filter_combobox.addItem("All")
+        self.status_filter_combobox.addItem("No Status")   # untagged assets
+        self.status_filter_combobox.addItems(constants.STATUS_OPTIONS)
+        self.status_filter_combobox.setStyleSheet(_combo_style)
+
+        for combo in (self.department_filter_combobox, self.artist_filter_combobox,
+                      self.status_filter_combobox):
             combo.view().setFrameShape(QFrame.NoFrame)
 
         self.search_bar = QLineEdit()
@@ -198,6 +212,8 @@ class HeaderWidget(QWidget):
         self.main_layout.addWidget(self.department_filter_combobox)
         self.main_layout.addWidget(self.artist_filter_label)
         self.main_layout.addWidget(self.artist_filter_combobox)
+        self.main_layout.addWidget(self.status_filter_label)
+        self.main_layout.addWidget(self.status_filter_combobox)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
@@ -225,6 +241,7 @@ class HeaderWidget(QWidget):
         self.search_bar.textChanged.connect(self.search_changed)
         self.department_filter_combobox.currentTextChanged.connect(self.department_changed)
         self.artist_filter_combobox.currentTextChanged.connect(self.artist_changed)
+        self.status_filter_combobox.currentTextChanged.connect(self.status_changed)
         self.filter_comboBox.currentTextChanged.connect(self.sort_changed)
         self.thumb_slider.valueChanged.connect(self._on_thumb_slider_changed)
 

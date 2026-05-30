@@ -22,6 +22,7 @@ Layout on disk
         "artist":       "johndoe",
         "department":   "Animation",
         "version":      10,
+        "status":       "WIP",
         "published_at": "2026-05-29T14:32:00",
         "dcc":          "Maya 2025",
         "notes":        "Cleaned up foot contacts"
@@ -45,7 +46,7 @@ from pathlib import Path
 
 # Sidecar keys that are treated as structured metadata when found as
 # ``key: value`` lines.  Everything else becomes the description.
-_SIDECAR_KEYS  = {"artist", "department", "version"}
+_SIDECAR_KEYS  = {"artist", "department", "version", "status"}
 _KV_RE         = re.compile(r"^\s*(\w+)\s*:\s*(.+)", re.IGNORECASE)
 
 _META_DIR = ".meta"

@@ -7,15 +7,15 @@ from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QAbstractItemView, QLabel, QApplication, QMenu, QStackedWidget,
-    QPushButton,
+    QPushButton, QStyledItemDelegate,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher, QMimeData, QUrl
-from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag
+from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag, QPainter, QPen, QColor
 
 from core import constants
 from core.constants import detect_department, detect_artist, canonical_stem, version_key
 from core.config import is_excluded
-from core.meta import read_meta, read_folder_meta
+from core.meta import read_meta, read_folder_meta, write_meta
 from core.styles import context_menu_style
 from utils.icons import (
     colored_icon, make_placeholder_icon, get_file_icon,
@@ -25,6 +25,50 @@ from widgets.thumbnail_loader import ThumbnailLoader
 
 # Maximum side length (px) of the hover-preview popup image.
 _PREVIEW_SIZE = 400
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Status badge delegate                                                        #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+class StatusBadgeDelegate(QStyledItemDelegate):
+    """Draws a coloured dot in the bottom-right corner of each grid/list icon
+    when the item has a pipeline status set (UserRole + 5)."""
+
+    def paint(self, painter, option, index):
+        # Let Qt draw the normal item first (icon + label + selection highlight)
+        super().paint(painter, option, index)
+
+        status = index.data(Qt.UserRole + 5)
+        if not status:
+            return
+
+        color = constants.STATUS_COLORS.get(status)
+        if not color:
+            return
+
+        dec_w = option.decorationSize.width()
+        dec_h = option.decorationSize.height()
+
+        # Badge radius: slightly larger in grid view than list view
+        r = 10 if dec_w >= 80 else 7
+
+        # Qt centres the icon horizontally inside the cell rect and adds a
+        # small top margin (~4 px).  Replicate that to find the icon origin.
+        cell  = option.rect
+        icon_x = cell.x() + (cell.width() - dec_w) // 2
+        icon_y = cell.y() + 4
+
+        # Place the badge circle just inside the bottom-right corner of the icon
+        cx = icon_x + dec_w - r - 3
+        cy = icon_y + dec_h - r - 3
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(QColor("#000000"), 2))      # dark outline for contrast
+        painter.setBrush(QColor(color))
+        painter.drawEllipse(cx - r, cy - r, r * 2, r * 2)
+        painter.restore()
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -130,6 +174,7 @@ class CenterPanel(QWidget):
         self._dept_filter     = "All"
         self._sort_mode       = "version_desc"   # "name" | "version_desc" | "version_asc"
         self._artist_filter   = "All"
+        self._status_filter   = "All"
         # (canonical, ext) -> {dept: Path, '_overall': Path}
         self._asset_versions: dict = {}
         self.create_widgets()
@@ -152,6 +197,7 @@ class CenterPanel(QWidget):
         self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_widget.setDragEnabled(True)
         self.list_widget.setDragDropMode(QAbstractItemView.DragOnly)
+        self.list_widget.setItemDelegate(StatusBadgeDelegate(self.list_widget))
 
         # ── Loading indicator ────────────────────────────────────────────
         self._loading_label = QLabel("Loading")
@@ -318,6 +364,20 @@ class CenterPanel(QWidget):
         else:
             self._load_direct(folder, icon_size)
 
+    def update_item_status(self, path: str, status: str):
+        """Update the status badge for *path* without reloading the folder.
+
+        Called when the right panel's status combo changes so the badge
+        stays in sync immediately.
+        """
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.UserRole) == path:
+                item.setData(Qt.UserRole + 5, status)
+                break
+        self._apply_filters()
+        self.list_widget.viewport().update()
+
     def filter_items(self, text: str):
         """Filter by search text (connected to the search bar)."""
         self._text_filter = text
@@ -331,6 +391,12 @@ class CenterPanel(QWidget):
     def filter_artist(self, artist: str):
         """Filter by artist name; pass ``'All'`` to show everything."""
         self._artist_filter = artist
+        self._apply_filters()
+
+    def filter_status(self, status: str):
+        """Filter by pipeline status; pass ``'All'`` to show everything.
+        Full implementation in step 5 — stub keeps the signal connection live."""
+        self._status_filter = status
         self._apply_filters()
 
     def sort_items(self, label: str):
@@ -507,6 +573,7 @@ class CenterPanel(QWidget):
                     item.setData(Qt.UserRole + 1, True)
                     item.setData(Qt.UserRole + 2, "")
                     item.setData(Qt.UserRole + 4, "")
+                    item.setData(Qt.UserRole + 5, "")   # folders have no status
                     item.setIcon(colored_icon(constants.ACCENT, closed=True, size=icon_size))
                 else:
                     meta = folder_meta.get(p.stem, {})
@@ -551,6 +618,8 @@ class CenterPanel(QWidget):
         item.setData(Qt.UserRole + 2, meta.get("department") or detect_department(p.name))
         # Artist: meta → filename convention fallback
         item.setData(Qt.UserRole + 4, meta.get("artist") or detect_artist(p.name))
+        # Status: from .meta file (empty string = no status set)
+        item.setData(Qt.UserRole + 5, meta.get("status", ""))
 
         if ext in constants.IMAGE_EXTS:
             item.setIcon(make_placeholder_icon(constants.BORDER, icon_size, "..."))
@@ -621,22 +690,37 @@ class CenterPanel(QWidget):
             name_ok   = (text in item.text().lower()) if text else True
             asset_key = item.data(Qt.UserRole + 3)   # None for non-SEQ items
 
+            status = self._status_filter
+
             if is_folder:
-                dept_ok = artist_ok = True
+                dept_ok = artist_ok = status_ok = True
             elif asset_key is not None and asset_key in self._asset_versions:
-                # SEQ item — swap path, never hide by dept/artist
+                # SEQ item — swap path, never hide by dept/artist/status
                 versions = self._asset_versions[asset_key]
                 target   = versions.get(dept) if dept not in ("All", "") else None
                 target   = target or versions.get("_overall")
                 if target:
-                    item.setData(Qt.UserRole,     str(target))
+                    current_stored = item.data(Qt.UserRole)
+                    new_path       = str(target)
+                    item.setData(Qt.UserRole,     new_path)
                     item.setData(Qt.UserRole + 2, detect_department(target.name))
-                dept_ok = artist_ok = True
+                    # Refresh the status badge when the active path changes
+                    if current_stored != new_path:
+                        _meta = read_meta(target)
+                        item.setData(Qt.UserRole + 5, _meta.get("status", ""))
+                dept_ok = artist_ok = status_ok = True
             else:
                 dept_ok   = dept   in ("All", "") or item.data(Qt.UserRole + 2) == dept
                 artist_ok = artist in ("All", "") or item.data(Qt.UserRole + 4) == artist
+                item_status = item.data(Qt.UserRole + 5) or ""
+                if status in ("All", ""):
+                    status_ok = True
+                elif status == "No Status":
+                    status_ok = item_status == ""
+                else:
+                    status_ok = item_status == status
 
-            item.setHidden(not (name_ok and dept_ok and artist_ok))
+            item.setHidden(not (name_ok and dept_ok and artist_ok and status_ok))
 
         self._update_empty_state()
 
@@ -722,6 +806,7 @@ class CenterPanel(QWidget):
             bool(self._text_filter)
             or self._dept_filter   not in ("All", "")
             or self._artist_filter not in ("All", "")
+            or self._status_filter not in ("All", "")   # includes "No Status"
         )
 
         if total == 0:
@@ -749,6 +834,7 @@ class CenterPanel(QWidget):
         self._text_filter   = ""
         self._dept_filter   = "All"
         self._artist_filter = "All"
+        self._status_filter = "All"
         self.filters_cleared.emit()          # header widget resets its combos
         if self.current_path:
             self.load_folder(self.current_path)
@@ -916,6 +1002,18 @@ class CenterPanel(QWidget):
                     player_act = menu.addAction("Open in BlastPlayer")
                     player_act.triggered.connect(lambda: self._open_in_blast_player(path))
 
+                # ── Set Status submenu ───────────────────────────────────
+                menu.addSeparator()
+                status_menu = menu.addMenu("Set Status")
+                for _s in constants.STATUS_OPTIONS:
+                    _act = status_menu.addAction(_s)
+                    _act.triggered.connect(
+                        lambda *_, s=_s: self._set_status([item], s)
+                    )
+                status_menu.addSeparator()
+                clear_act = status_menu.addAction("Clear Status")
+                clear_act.triggered.connect(lambda: self._set_status([item], ""))
+
                 menu.addSeparator()
                 if sys.platform == "win32":
                     reveal_label = "Show in Explorer"
@@ -931,10 +1029,56 @@ class CenterPanel(QWidget):
                 lambda: self._copy_to_clipboard("\n".join(paths))
             )
 
+            # Set Status for all selected *files* (skip folders)
+            file_items = [it for it in items if not it.data(Qt.UserRole + 1)]
+            if file_items:
+                menu.addSeparator()
+                status_menu = menu.addMenu(f"Set Status  ({len(file_items)} files)")
+                for _s in constants.STATUS_OPTIONS:
+                    _act = status_menu.addAction(_s)
+                    _act.triggered.connect(
+                        lambda *_, s=_s: self._set_status(file_items, s)
+                    )
+                status_menu.addSeparator()
+                clear_act = status_menu.addAction("Clear Status")
+                clear_act.triggered.connect(lambda: self._set_status(file_items, ""))
+
         menu.exec_(self.list_widget.viewport().mapToGlobal(pos))
 
     def _copy_to_clipboard(self, text: str):
         QApplication.clipboard().setText(text)
+
+    def _set_status(self, items: list, status: str):
+        """Write *status* to each item's .meta file and refresh the badge.
+
+        *status* is one of STATUS_OPTIONS, or ``""`` to clear.
+        Changes take effect immediately in the list (no reload needed).
+        """
+        for item in items:
+            path = item.data(Qt.UserRole)
+            if not path:
+                continue
+            p = Path(path)
+            try:
+                data = read_meta(p)
+                if status:
+                    data["status"] = status
+                else:
+                    data.pop("status", None)
+                write_meta(p, data)
+                item.setData(Qt.UserRole + 5, status)
+            except Exception as e:
+                print(f"[CenterPanel] Could not set status for {p.name}: {e}")
+        # Re-run filters so "No Status" / specific-status filters update live
+        self._apply_filters()
+        # Force the delegate to repaint every visible item — Qt does not
+        # automatically redraw for custom UserRole changes.
+        self.list_widget.viewport().update()
+        # If the right panel is showing one of the files we just changed,
+        # re-emit file_selected so its status combo/badge refreshes too.
+        selected = self.list_widget.selectedItems()
+        if len(selected) == 1 and selected[0] in items:
+            self.file_selected.emit(selected[0].data(Qt.UserRole))
 
     def _open_in_blast_player(self, path: str):
         """Launch BlastPlayer in a separate process with *path* pre-loaded."""

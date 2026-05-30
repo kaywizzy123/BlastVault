@@ -67,9 +67,18 @@ FFMPEG_PATH: str = (
     or next((c for c in _FFMPEG_FALLBACKS if Path(c).exists()), "")
 )
 
-# Path to the sibling BlastPlayer project.
-# Resolved at import time; overridable by setting constants.BLAST_PLAYER_PATH.
-BLAST_PLAYER_PATH: Path = _ROOT.parent / "BlastPlayer" / "main.py"
+# Path to the BlastPlayer entry-point.  Candidates are checked in order;
+# the first existing file wins.  Falls back to the sibling-directory path
+# even when nothing is found so callers always have a displayable string.
+_BLAST_PLAYER_CANDIDATES = [
+    _ROOT.parent / "BlastPlayer" / "main.py",   # sibling directory (default layout)
+    _ROOT / "BlastPlayer" / "main.py",           # embedded sub-directory
+    Path.home() / "BlastPlayer" / "main.py",     # home-directory install
+]
+BLAST_PLAYER_PATH: Path = next(
+    (c for c in _BLAST_PLAYER_CANDIDATES if c.is_file()),
+    _BLAST_PLAYER_CANDIDATES[0],  # default even when not found
+)
 
 # Window / splitter state — persisted across sessions via config.json.
 WINDOW_MAXIMIZED: bool  = True
@@ -92,13 +101,27 @@ FAIL = "#ad0303"
 SUCCESS = "#03ad14"
 SPLITTER_COLOR = "#292929"
 
+# ── Asset status ─────────────────────────────────────────────────────────── #
+STATUS_OPTIONS: list[str] = ["WIP", "Review", "Approved", "Revision", "On Hold"]
+
+STATUS_COLORS: dict[str, str] = {
+    "WIP":      "#e5a820",   # amber
+    "Review":   "#1085d3",   # blue  (same as ACCENT_HI)
+    "Approved": "#03ad14",   # green (same as SUCCESS)
+    "Revision": "#a1a1a1",   # grey  (same as TEXT_SEC)
+    "On Hold":  "#ad0303",   # red   (same as FAIL)
+}
+
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm"}
 DOC_EXTS   = {".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx", ".ppt", ".pptx"}
 AUDIO_EXTS = {".mp3", ".wav", ".aac", ".flac", ".ogg", ".aiff", ".m4a"}
 OBJ_3D_EXTS = {".fbx", ".usd", ".usda", ".usdc", ".usdz"}
 
-ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS | OBJ_3D_EXTS | DOC_EXTS
+# Only video, image, and audio files are surfaced in the browser.
+# DOC_EXTS / OBJ_3D_EXTS are kept as named sets so icons.py can still
+# generate placeholder icons if it ever encounters those file types.
+ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS
 
 EXCLUDED_PATTERNS = []
 

@@ -1,5 +1,6 @@
 import hashlib
 import os
+import time
 from pathlib import Path
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor
@@ -212,3 +213,33 @@ def get_clapperboard_icon(icon_size) -> QIcon:
     if not pixmap.isNull():
         return QIcon(pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
     return make_placeholder_icon("#1a1a2e", icon_size, "▶")
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Cache maintenance                                                            #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+def prune_thumbnail_cache(max_age_days: int = 30) -> int:
+    """Delete cached thumbnail files not accessed for *max_age_days*.
+
+    Scans both ``THUMB_CACHE_DIR`` (video thumbnails) and the ``img``
+    subdirectory (scaled image thumbnails).  Skips anything it cannot read
+    or delete so it is safe to run in a background thread.
+
+    Returns the number of files removed.
+    """
+    cutoff  = time.time() - max_age_days * 86400
+    removed = 0
+    for cache_dir in (THUMB_CACHE_DIR, THUMB_CACHE_DIR / "img"):
+        if not cache_dir.is_dir():
+            continue
+        for f in cache_dir.iterdir():
+            if not f.is_file():
+                continue
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    removed += 1
+            except OSError:
+                pass
+    return removed

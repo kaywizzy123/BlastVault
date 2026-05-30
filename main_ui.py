@@ -43,6 +43,8 @@ class MainWindow(QMainWindow):
         self.left_panel.restore_catalogs(saved_catalogs)
 
         self._splash_update(100, "Ready!")
+        # Prune stale thumbnail cache entries 5 s after startup (background)
+        QTimer.singleShot(5000, self._prune_thumb_cache)
         if is_first_run:
             dlg = FirstRunDialog(self)
             dlg.exec_()
@@ -120,7 +122,9 @@ class MainWindow(QMainWindow):
         self.center_panel.items_loaded.connect(self.footer.update_items)
         self.center_panel.selection_changed.connect(self.footer.update_selection)
         self.center_panel.file_selected.connect(self.right_panel.display_metadata)
+        self.right_panel.status_changed.connect(self.center_panel.update_item_status)
         self.center_panel.filters_cleared.connect(self.on_filters_cleared)
+        self.header_widget.status_changed.connect(self.center_panel.filter_status)
 
     def on_folder_selected(self, path):
         self.header_widget.search_bar.clear()
@@ -153,6 +157,10 @@ class MainWindow(QMainWindow):
         self.header_widget.artist_filter_combobox.setCurrentIndex(0)
         self.header_widget.artist_filter_combobox.blockSignals(False)
 
+        self.header_widget.status_filter_combobox.blockSignals(True)
+        self.header_widget.status_filter_combobox.setCurrentIndex(0)
+        self.header_widget.status_filter_combobox.blockSignals(False)
+
     def on_artists_found(self, artists: list):
         """Called every time a folder finishes loading.
 
@@ -177,6 +185,12 @@ class MainWindow(QMainWindow):
             constants.WINDOW_GEOMETRY = (geo.x(), geo.y(), geo.width(), geo.height())
         save_config()
         super().closeEvent(event)
+
+    def _prune_thumb_cache(self):
+        """Prune old thumbnail cache entries in a daemon background thread."""
+        import threading
+        from utils.icons import prune_thumbnail_cache
+        threading.Thread(target=prune_thumbnail_cache, daemon=True).start()
 
     def on_settings_changed(self):
         self.header_widget.update_studio_label(constants.STUDIO_NAME)
