@@ -2,12 +2,13 @@ import sys
 import os
 import subprocess
 import threading
+import datetime
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QAbstractItemView, QLabel, QApplication, QMenu, QStackedWidget,
-    QPushButton, QStyledItemDelegate,
+    QPushButton, QStyledItemDelegate, QScrollArea, QFrame,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QPoint, pyqtSignal, QFileSystemWatcher, QMimeData, QUrl
 from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag, QPainter, QPen, QColor
@@ -153,6 +154,215 @@ class ThumbnailPreviewPopup(QWidget):
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
+#  Version history popup                                                        #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+class VersionCard(QWidget):
+    """Single clickable card inside the version history popup."""
+    version_clicked = pyqtSignal(str)   # absolute path
+
+    THUMB_W = 90
+    THUMB_H = 51    # 16:9
+    CARD_W  = 100
+    CARD_H  = 122
+
+    def __init__(self, p: Path, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setCursor(Qt.PointingHandCursor)
+        self._path = str(p)
+        self.setFixedSize(self.CARD_W, self.CARD_H)
+        self._normal_style = (
+            f"QWidget {{ background:{constants.BG}; border-radius:5px;"
+            f" border:1px solid {constants.SPLITTER_COLOR}; }}"
+        )
+        self._hover_style = (
+            f"QWidget {{ background:{constants.ACCENT}; border-radius:5px;"
+            f" border:1px solid {constants.ACCENT_HI}; }}"
+        )
+        self.setStyleSheet(self._normal_style)
+
+        # ── Thumbnail ────────────────────────────────────────────────────
+        thumb_lbl = QLabel()
+        thumb_lbl.setFixedSize(self.THUMB_W, self.THUMB_H)
+        thumb_lbl.setAlignment(Qt.AlignCenter)
+        thumb_lbl.setStyleSheet("background:#000; border-radius:3px; border:none;")
+
+        # Read meta once — used by both department and status sections below
+        meta = read_meta(p)
+
+        ext = p.suffix.lower()
+        if ext in constants.IMAGE_EXTS:
+            icon = get_file_icon(str(p), (self.THUMB_W, self.THUMB_H))
+        elif ext in constants.VIDEO_EXTS:
+            icon = (get_cached_video_icon(str(p), (self.THUMB_W, self.THUMB_H))
+                    or get_clapperboard_icon((self.THUMB_W, self.THUMB_H)))
+        else:
+            icon = None
+        if icon:
+            thumb_lbl.setPixmap(icon.pixmap(self.THUMB_W, self.THUMB_H))
+
+        # ── Version label ────────────────────────────────────────────────
+        _, ver = version_key(p.stem)
+        ver_lbl = QLabel(f"v{ver:03d}" if ver is not None else p.stem[-4:])
+        ver_lbl.setAlignment(Qt.AlignCenter)
+        ver_lbl.setStyleSheet(
+            f"color:{constants.TEXT_PRI}; font-size:11px; font-weight:bold;"
+            f" background:transparent; border:none;"
+        )
+
+        # ── Department ───────────────────────────────────────────────────
+        dept = meta.get("department") or detect_department(p.name)
+        dept_lbl = QLabel(dept if dept else "—")
+        dept_lbl.setAlignment(Qt.AlignCenter)
+        dept_lbl.setStyleSheet(
+            f"color:{constants.TEXT_SEC}; font-size:9px;"
+            f" background:transparent; border:none;"
+        )
+
+        # ── Date ─────────────────────────────────────────────────────────
+        try:
+            ctime    = constants.file_ctime(p)
+            date_str = datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d")
+        except Exception:
+            date_str = ""
+        date_lbl = QLabel(date_str)
+        date_lbl.setAlignment(Qt.AlignCenter)
+        date_lbl.setStyleSheet(
+            f"color:{constants.TEXT_SEC}; font-size:9px;"
+            f" background:transparent; border:none;"
+        )
+
+        # ── Status dot + label ───────────────────────────────────────────
+        status     = meta.get("status", "")
+        dot_color  = constants.STATUS_COLORS.get(status, constants.SPLITTER_COLOR)
+        dot        = QLabel()
+        dot.setFixedSize(7, 7)
+        dot.setStyleSheet(
+            f"background:{dot_color}; border-radius:3px; border:none;"
+        )
+        status_lbl = QLabel(status if status else "—")
+        status_lbl.setStyleSheet(
+            f"color:{constants.TEXT_SEC}; font-size:9px;"
+            f" background:transparent; border:none;"
+        )
+        s_row = QHBoxLayout()
+        s_row.setContentsMargins(0, 0, 0, 0)
+        s_row.setSpacing(3)
+        s_row.addStretch()
+        s_row.addWidget(dot, alignment=Qt.AlignVCenter)
+        s_row.addWidget(status_lbl)
+        s_row.addStretch()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 4, 5, 4)
+        layout.setSpacing(2)
+        layout.addWidget(thumb_lbl, alignment=Qt.AlignCenter)
+        layout.addWidget(ver_lbl)
+        layout.addWidget(dept_lbl)
+        layout.addWidget(date_lbl)
+        layout.addLayout(s_row)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.version_clicked.emit(self._path)
+        super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        self.setStyleSheet(self._hover_style)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setStyleSheet(self._normal_style)
+        super().leaveEvent(event)
+
+
+class VersionHistoryPopup(QWidget):
+    """Floating popup showing all versions of a SEQ asset as clickable cards."""
+    version_selected = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet(
+            f"background:{constants.BORDER};"
+            f"border:1px solid {constants.SPLITTER_COLOR};"
+            f"border-radius:8px;"
+        )
+
+        # Title bar
+        self._title_lbl = QLabel()
+        self._title_lbl.setStyleSheet(
+            f"color:{constants.TEXT_SEC}; font-size:10px;"
+            f" background:transparent; border:none; padding:0 4px;"
+        )
+
+        # Scroll area with horizontal strip of cards
+        self._scroll = QScrollArea()
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet("background:transparent; border:none;")
+        self._scroll.setWidgetResizable(False)
+
+        self._strip = QWidget()
+        self._strip.setStyleSheet("background:transparent;")
+        self._strip_layout = QHBoxLayout(self._strip)
+        self._strip_layout.setContentsMargins(6, 4, 6, 4)
+        self._strip_layout.setSpacing(6)
+        self._scroll.setWidget(self._strip)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setSpacing(4)
+        outer.addWidget(self._title_lbl)
+        outer.addWidget(self._scroll)
+
+    def show_versions(self, asset_name: str, paths: list, global_pos: QPoint):
+        """Populate cards and show the popup centred above *global_pos*."""
+        # Remove old cards
+        while self._strip_layout.count():
+            child = self._strip_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        n = len(paths)
+        plural = "s" if n != 1 else ""
+        self._title_lbl.setText(f"  {asset_name}  —  {n} version{plural}")
+
+        for p_str in paths:
+            card = VersionCard(Path(p_str))
+            card.version_clicked.connect(self._on_card_clicked)
+            self._strip_layout.addWidget(card)
+
+        # Size popup to fit cards (max ~6 visible; scroll for more)
+        card_stride = VersionCard.CARD_W + 6
+        strip_w     = n * card_stride + 12          # inner widget width
+        visible_w   = min(strip_w, 6 * card_stride + 12)   # max 6 visible
+        scroll_h    = VersionCard.CARD_H + 20       # card + scrollbar allowance
+
+        self._strip.setFixedSize(strip_w, VersionCard.CARD_H + 8)
+        self._scroll.setFixedSize(visible_w, scroll_h)
+        self.adjustSize()
+
+        # Position: centred above cursor; flip below if near top of screen
+        screen = QApplication.desktop().screenGeometry(global_pos)
+        w, h   = self.sizeHint().width(), self.sizeHint().height()
+        x = global_pos.x() - w // 2
+        y = global_pos.y() - h - 10
+        x = max(screen.left() + 4, min(x, screen.right()  - w - 4))
+        if y < screen.top() + 4:
+            y = global_pos.y() + 24
+        self.move(x, y)
+        self.show()
+        self.raise_()
+
+    def _on_card_clicked(self, path: str):
+        self.version_selected.emit(path)
+        self.hide()
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
 #  CenterPanel                                                                  #
 # ──────────────────────────────────────────────────────────────────────────── #
 
@@ -176,6 +386,7 @@ class CenterPanel(QWidget):
         self._artist_filter   = "All"
         self._status_filter   = "All"
         self._status_locked   = True    # True until supervisor unlocks
+        self._all_versions: dict = {}   # (canonical, ext) -> [Path, …] newest-first
         # (canonical, ext) -> {dept: Path, '_overall': Path}
         self._asset_versions: dict = {}
         self.create_widgets()
@@ -226,6 +437,9 @@ class CenterPanel(QWidget):
         self._autohide_timer.setSingleShot(True)
         self._autohide_timer.setInterval(10000)      # hide after 10 s of no movement
         self._autohide_timer.timeout.connect(self._preview_popup.hide_preview)
+
+        self._version_popup = VersionHistoryPopup()
+        self._version_popup.version_selected.connect(self.file_selected)
 
         self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.list_widget.installEventFilter(self)   # keyboard nav
@@ -483,6 +697,8 @@ class CenterPanel(QWidget):
         by_dept: dict[tuple, tuple] = {}
         # (canonical, ext)        -> (ctime, Path)  — best file overall (fallback)
         overall: dict[tuple, tuple] = {}
+        # (canonical, ext)        -> [(ver_int, Path), …]  — ALL versions
+        all_ver_dict: dict[tuple, list] = {}
 
         _scan_error: str = ""
         try:
@@ -513,6 +729,10 @@ class CenterPanel(QWidget):
                     overall_key = (can, ext)
                     if overall_key not in overall or ctime > overall[overall_key][0]:
                         overall[overall_key] = (ctime, p)
+
+                    # Collect every version for the history popup
+                    _ver = version_key(p.stem)[1] or 0
+                    all_ver_dict.setdefault(overall_key, []).append((_ver, p))
         except PermissionError as e:
             _scan_error = f"Permission denied — some files could not be read.\n{e}"
         except OSError as e:
@@ -524,6 +744,12 @@ class CenterPanel(QWidget):
             self._show_empty("cancel.png", "Cannot read folder",
                              _scan_error, show_clear=False, error=True)
             return
+
+        # Store all versions sorted newest-first for the history popup
+        self._all_versions = {
+            k: [p for _, p in sorted(v, key=lambda x: x[0], reverse=True)]
+            for k, v in all_ver_dict.items()
+        }
 
         # Build lookup: (canonical, ext) -> {dept: Path, '_overall': Path}
         asset_versions: dict[tuple, dict] = {}
@@ -546,6 +772,7 @@ class CenterPanel(QWidget):
             label   = canonical_stem(base, artist_token) if base is not None else p.stem
             item    = self._make_file_item(label, p, ext, icon_size, thumbnail_paths, meta)
             item.setData(Qt.UserRole + 3, (can, ext))   # SEQ asset key
+            item.setData(Qt.UserRole + 5, "")           # no badge at SEQ level
             self.list_widget.addItem(item)
 
         self._start_thumbnail_loader(thumbnail_paths, icon_size)
@@ -556,6 +783,7 @@ class CenterPanel(QWidget):
 
     def _load_direct(self, folder: Path, icon_size: int):
         """Show immediate contents: subfolders first, then files."""
+        self._all_versions = {}   # no version history in flat-folder view
         # Read all .meta files in this folder in one pass
         folder_meta = read_folder_meta(folder)
 
@@ -709,10 +937,9 @@ class CenterPanel(QWidget):
                     new_path       = str(target)
                     item.setData(Qt.UserRole,     new_path)
                     item.setData(Qt.UserRole + 2, detect_department(target.name))
-                    # Refresh the status badge when the active path changes
+                    # Keep badge suppressed at SEQ level — never show status dot here
                     if current_stored != new_path:
-                        _meta = read_meta(target)
-                        item.setData(Qt.UserRole + 5, _meta.get("status", ""))
+                        item.setData(Qt.UserRole + 5, "")
                 dept_ok = artist_ok = status_ok = True
             else:
                 dept_ok   = dept   in ("All", "") or item.data(Qt.UserRole + 2) == dept
@@ -992,6 +1219,17 @@ class CenterPanel(QWidget):
                 ))
                 menu.addSeparator()
 
+            # Version History — only for SEQ items (UserRole+3 set)
+            asset_key = item.data(Qt.UserRole + 3)
+            if asset_key is not None and asset_key in self._all_versions:
+                hist_pos = self.list_widget.viewport().mapToGlobal(pos)
+                history_act = menu.addAction("Version History")
+                history_act.triggered.connect(
+                    lambda *_, k=asset_key, gp=hist_pos:
+                        self._show_version_history(k, gp)
+                )
+                menu.addSeparator()
+
             copy_path_act = menu.addAction("Copy Path")
             copy_path_act.triggered.connect(lambda: self._copy_to_clipboard(path))
 
@@ -1054,6 +1292,14 @@ class CenterPanel(QWidget):
                 clear_act.triggered.connect(lambda: self._set_status(file_paths, ""))
 
         menu.exec_(self.list_widget.viewport().mapToGlobal(pos))
+
+    def _show_version_history(self, asset_key: tuple, global_pos: QPoint):
+        """Open the version history popup for *asset_key* near *global_pos*."""
+        paths = self._all_versions.get(asset_key, [])
+        if len(paths) < 1:
+            return
+        can = asset_key[0]
+        self._version_popup.show_versions(can, [str(p) for p in paths], global_pos)
 
     def _copy_to_clipboard(self, text: str):
         QApplication.clipboard().setText(text)
