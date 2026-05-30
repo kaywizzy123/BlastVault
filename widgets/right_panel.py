@@ -4,10 +4,10 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QFormLayout, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QTextEdit, QComboBox,
+    QLabel, QLineEdit, QTextEdit, QComboBox, QPushButton,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QImageReader
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt5.QtGui import QImageReader, QIcon
 
 from core import constants, styles
 from core.constants import detect_department, detect_artist, version_key, file_ctime
@@ -155,6 +155,7 @@ class RightPanel(QWidget):
         self.file_details_widget  = CollapsibleWidget("File Details")
         self.file_details_widget.set_expanded(True)
         self.media_details_widget = CollapsibleWidget("Media Details")
+        self.media_details_widget.set_expanded(True)
 
     def create_layout(self):
         # ── File Details form ────────────────────────────────────────────
@@ -195,6 +196,26 @@ class RightPanel(QWidget):
             media_form.addRow(QLabel(label_text), widget)
         self.media_details_widget.add_layout(media_form)
 
+        # ── Notes button ─────────────────────────────────────────────────
+        self.notes_btn = QPushButton()
+        self.notes_btn.setIcon(QIcon(str(constants.ICONS_DIR / "add_note.png")))
+        self.notes_btn.setIconSize(QSize(18, 18))
+        self.notes_btn.setFixedSize(28, 28)
+        self.notes_btn.setCursor(Qt.PointingHandCursor)
+        self.notes_btn.setToolTip("Notes")
+        self.notes_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.ACCENT_HI};
+                border: 1px solid {constants.ACCENT_HI};
+            }}
+        """)
+        self.notes_btn.clicked.connect(self._on_notes_clicked)
+
         # ── Content container (hidden until a file is selected) ──────────
         self.content_widget = QWidget()
         self.content_widget.hide()
@@ -203,6 +224,11 @@ class RightPanel(QWidget):
         content_layout.setSpacing(0)
         content_layout.addWidget(self.file_details_widget)
         content_layout.addWidget(self.media_details_widget)
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 4, 10, 0)
+        btn_row.addStretch()
+        btn_row.addWidget(self.notes_btn)
+        content_layout.addLayout(btn_row)
         content_layout.addStretch()
 
         self.main_layout = QVBoxLayout(self)
@@ -216,7 +242,7 @@ class RightPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def set_status_locked(self, locked: bool):
-        """Enable or disable the status combo (supervisor lock)."""
+        """Toggle between supervisor combo and artist submit button."""
         self.status_combo.setEnabled(not locked)
         self.status_combo.setToolTip(
             "Status locked  —  unlock via the padlock in the header" if locked else ""
@@ -384,6 +410,13 @@ class RightPanel(QWidget):
             self.frame_details.setText(f"{info['nb_frames']:,} frames")
         else:
             self.frame_details.clear()
+
+    def _on_notes_clicked(self):
+        """Open the notes dialog for the currently displayed file."""
+        if self._current_path is None:
+            return
+        from dialogs.notes_dialog import NotesDialog
+        NotesDialog(str(self._current_path), parent=self).exec_()
 
     def _on_status_changed(self, status: str):
         """Write the selected status to the .meta file immediately."""

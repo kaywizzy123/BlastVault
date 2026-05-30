@@ -14,7 +14,11 @@ def load_config():
             constants.EXCLUDED_PATTERNS = data.get("excluded_patterns", [])
             constants.STUDIO_NAME       = data.get("studio_name",  constants.STUDIO_NAME)
             constants.ROOT_DIR          = data.get("root_dir",     constants.ROOT_DIR)
-            constants.DEPARTMENTS       = data.get("departments",  constants.DEPARTMENTS)
+            _REMOVED_DEPTS = {"Visual Development", "Modeling", "Rigging"}
+            constants.DEPARTMENTS = [
+                d for d in data.get("departments", constants.DEPARTMENTS)
+                if d not in _REMOVED_DEPTS
+            ]
             constants.ARTISTS           = data.get("artists",      constants.ARTISTS)
 
             constants.SUPERVISOR_PIN_HASH = data.get("supervisor_pin_hash", "")

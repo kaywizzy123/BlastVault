@@ -17,6 +17,7 @@ from core import constants
 from core.constants import detect_department, detect_artist, canonical_stem, version_key
 from core.config import is_excluded, has_media_or_subfolders
 from core.meta import read_meta, read_folder_meta, write_meta
+from core.notes import has_notes
 from core.styles import context_menu_style
 from utils.icons import (
     colored_icon, make_placeholder_icon, get_file_icon,
@@ -33,42 +34,65 @@ _PREVIEW_SIZE = 400
 # ──────────────────────────────────────────────────────────────────────────── #
 
 class StatusBadgeDelegate(QStyledItemDelegate):
-    """Draws a coloured dot in the bottom-right corner of each grid/list icon
-    when the item has a pipeline status set (UserRole + 5)."""
+    """Draws overlay badges on each grid/list icon:
+      • bottom-right — pipeline status colour dot  (UserRole + 5)
+      • top-left     — note.png icon               (UserRole + 6)
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Pre-load the notes icon once; scaled versions cached on first use.
+        self._note_pix_src = QPixmap(str(constants.ICONS_DIR / "note.png"))
+        self._note_pix_cache: dict[int, QPixmap] = {}  # size → scaled pixmap
+
+    def _note_pix(self, size: int) -> QPixmap:
+        """Return a *size×size* version of the notes icon (cached)."""
+        if size not in self._note_pix_cache:
+            self._note_pix_cache[size] = self._note_pix_src.scaled(
+                size, size,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        return self._note_pix_cache[size]
 
     def paint(self, painter, option, index):
         # Let Qt draw the normal item first (icon + label + selection highlight)
         super().paint(painter, option, index)
 
-        status = index.data(Qt.UserRole + 5)
-        if not status:
-            return
+        status    = index.data(Qt.UserRole + 5)
+        note_flag = bool(index.data(Qt.UserRole + 6))
 
-        color = constants.STATUS_COLORS.get(status)
-        if not color:
+        if not status and not note_flag:
             return
 
         dec_w = option.decorationSize.width()
         dec_h = option.decorationSize.height()
 
-        # Badge radius: slightly larger in grid view than list view
-        r = 10 if dec_w >= 80 else 7
-
-        # Qt centres the icon horizontally inside the cell rect and adds a
-        # small top margin (~4 px).  Replicate that to find the icon origin.
-        cell  = option.rect
+        # Qt centres the icon horizontally and adds a small top margin (~4 px).
+        cell   = option.rect
         icon_x = cell.x() + (cell.width() - dec_w) // 2
         icon_y = cell.y() + 4
 
-        # Place the badge circle just inside the bottom-right corner of the icon
-        cx = icon_x + dec_w - r - 3
-        cy = icon_y + dec_h - r - 3
-
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor("#000000"), 2))      # dark outline for contrast
-        painter.setBrush(QColor(color))
-        painter.drawEllipse(cx - r, cy - r, r * 2, r * 2)
+
+        # ── Status dot — bottom-right ────────────────────────────────────
+        if status:
+            color = constants.STATUS_COLORS.get(status)
+            if color:
+                r  = 10 if dec_w >= 80 else 7
+                cx = icon_x + dec_w - r - 3
+                cy = icon_y + dec_h - r - 3
+                painter.setPen(QPen(QColor("#000000"), 2))
+                painter.setBrush(QColor(color))
+                painter.drawEllipse(cx - r, cy - r, r * 2, r * 2)
+
+        # ── Notes icon — top-left ────────────────────────────────────────
+        if note_flag and not self._note_pix_src.isNull():
+            icon_size = 18 if dec_w >= 80 else 13
+            pix = self._note_pix(icon_size)
+            painter.drawPixmap(icon_x + 3, icon_y + 3, pix)
+
         painter.restore()
 
 
@@ -855,6 +879,8 @@ class CenterPanel(QWidget):
         item.setData(Qt.UserRole + 4, meta.get("artist") or detect_artist(p.name))
         # Status: from .meta file (empty string = no status set)
         item.setData(Qt.UserRole + 5, meta.get("status", ""))
+        # Notes indicator: True if a .notes.json sidecar exists for this asset
+        item.setData(Qt.UserRole + 6, has_notes(p))
 
         if ext in constants.IMAGE_EXTS:
             item.setIcon(make_placeholder_icon(constants.BORDER, icon_size, "..."))
@@ -1245,14 +1271,30 @@ class CenterPanel(QWidget):
             )
 
             if not is_folder:
+                notes_act = menu.addAction("Notes")
+                notes_act.triggered.connect(
+                    lambda *_, p=path: self._show_notes_dialog(p)
+                )
+
+            if not is_folder:
                 ext = Path(path).suffix.lower()
                 if ext in constants.VIDEO_EXTS:
                     menu.addSeparator()
                     player_act = menu.addAction("Open in BlastPlayer")
                     player_act.triggered.connect(lambda: self._open_in_blast_player(path))
 
-                # ── Set Status submenu (supervisor only, not SEQ level) ──
+                # ── Submit for Review (all users, not SEQ level) ─────────
                 is_seq = asset_key is not None
+                if not is_seq:
+                    menu.addSeparator()
+                    submit_act = menu.addAction("Submit for Review")
+                    current_status = item.data(Qt.UserRole + 5) or ""
+                    submit_act.setEnabled(current_status != "Approved")
+                    submit_act.triggered.connect(
+                        lambda *_, p=path: self._submit_for_review([p])
+                    )
+
+                # ── Set Status submenu (supervisor only, not SEQ level) ──
                 if not self._status_locked and not is_seq:
                     menu.addSeparator()
                     status_menu = menu.addMenu("Set Status")
@@ -1280,7 +1322,6 @@ class CenterPanel(QWidget):
                 lambda: self._copy_to_clipboard("\n".join(paths))
             )
 
-            # Set Status for all selected *files* — supervisor only
             # Exclude folders (UserRole+1) and SEQ items (UserRole+3)
             file_paths = [
                 it.data(Qt.UserRole)
@@ -1288,6 +1329,22 @@ class CenterPanel(QWidget):
                 if not it.data(Qt.UserRole + 1)       # exclude folders
                 and it.data(Qt.UserRole + 3) is None  # exclude SEQ items
             ]
+
+            # Submit for Review — all users, skip Approved
+            submittable = [
+                it.data(Qt.UserRole) for it in items
+                if not it.data(Qt.UserRole + 1)
+                and it.data(Qt.UserRole + 3) is None
+                and (it.data(Qt.UserRole + 5) or "") != "Approved"
+            ]
+            if submittable:
+                menu.addSeparator()
+                submit_act = menu.addAction(f"Submit for Review  ({len(submittable)} files)")
+                submit_act.triggered.connect(
+                    lambda *_, sp=submittable: self._submit_for_review(sp)
+                )
+
+            # Set Status for all selected *files* — supervisor only
             if file_paths and not self._status_locked:
                 menu.addSeparator()
                 status_menu = menu.addMenu(f"Set Status  ({len(file_paths)} files)")
@@ -1310,8 +1367,34 @@ class CenterPanel(QWidget):
         can = asset_key[0]
         self._version_popup.show_versions(can, [str(p) for p in paths], global_pos)
 
+    def _show_notes_dialog(self, path: str):
+        """Open the notes dialog for *path* and refresh its notes indicator on close."""
+        from dialogs.notes_dialog import NotesDialog
+        dlg = NotesDialog(path, parent=self)
+        dlg.exec_()
+        # Refresh the notes dot in case a note was just added
+        updated = has_notes(path)
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.UserRole) == path:
+                item.setData(Qt.UserRole + 6, updated)
+                break
+        self.list_widget.viewport().update()
+
     def _copy_to_clipboard(self, text: str):
         QApplication.clipboard().setText(text)
+
+    def _submit_for_review(self, paths: list):
+        """Set status to 'Review' for *paths*, skipping any already Approved."""
+        eligible = []
+        path_set = set(paths)
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(Qt.UserRole) in path_set:
+                if (item.data(Qt.UserRole + 5) or "") != "Approved":
+                    eligible.append(item.data(Qt.UserRole))
+        if eligible:
+            self._set_status(eligible, "Review")
 
     def _set_status(self, paths: list, status: str):
         """Write *status* to each file in *paths* and refresh the badge.

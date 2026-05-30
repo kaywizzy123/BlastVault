@@ -87,6 +87,8 @@ SPLITTER_SIZES:   list  = []    # empty → use hardcoded defaults in MainWindow
 
 # Supervisor PIN (SHA-256 hex digest).  Empty string = no PIN set yet.
 SUPERVISOR_PIN_HASH: str = ""
+# Runtime lock state — True = locked (default), False = supervisor unlocked.
+STATUS_LOCKED: bool = True
 
 GRID_ICON_W    = 180          # icon width  — 16:9 asset grid
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
@@ -133,15 +135,13 @@ ARTISTS: list[str] = ["All"]   # populated from config; "All" always first
 DEPARTMENTS = [
     "All",
     "Story",
-    "Visual Development",
-    "Modeling",
-    "Rigging",
     "Layout",
     "Layout Finaling",
     "Animation",
     "Character FX",
     "FX / Simulation",
     "Lighting",
+    "Compositing",
     "Matte Painting",
 ]
 
@@ -175,8 +175,11 @@ DEPARTMENT_KEYWORDS: dict[str, str] = {
     "light":      "Lighting",
     "lgt":        "Lighting",
     "lighting":   "Lighting",
-    "matte":      "Matte Painting",
-    "mattepaint": "Matte Painting",
+    "comp":        "Compositing",
+    "composite":   "Compositing",
+    "compositing": "Compositing",
+    "matte":       "Matte Painting",
+    "mattepaint":  "Matte Painting",
 }
 
 _SPLIT_RE   = _re.compile(r'[_\-.\s]+')

@@ -7,9 +7,6 @@
   "departments": [
     "All",
     "Story",
-    "Visual Development",
-    "Modeling",
-    "Rigging",
     "Layout",
     "Animation",
     "Layout Finaling",
@@ -44,16 +41,16 @@
   ],
   "blast_player_path": "C:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastPlayer\\main.py",
   "window_geometry": {
-    "maximized": false,
+    "maximized": true,
     "x": 1270,
     "y": 396,
     "width": 1291,
     "height": 600
   },
   "splitter_sizes": [
-    215,
-    867,
-    205
+    574,
+    2315,
+    547
   ],
   "supervisor_pin_hash": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5"
 }
