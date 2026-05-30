@@ -15,7 +15,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QCursor, QDrag, QPainter, QPen, QColor
 
 from core import constants
 from core.constants import detect_department, detect_artist, canonical_stem, version_key
-from core.config import is_excluded
+from core.config import is_excluded, has_media_or_subfolders
 from core.meta import read_meta, read_folder_meta, write_meta
 from core.styles import context_menu_style
 from utils.icons import (
@@ -795,7 +795,8 @@ class CenterPanel(QWidget):
             entries = sorted(folder.iterdir(), key=self._entry_sort_key)
             for p in entries:
                 # Hide .meta subfolder and any user-excluded patterns
-                if p.is_dir() and (p.name == ".meta" or is_excluded(p.name)):
+                if p.is_dir() and (p.name == ".meta" or is_excluded(p.name)
+                                   or not has_media_or_subfolders(str(p))):
                     continue
                 ext = p.suffix.lower()
                 if p.is_file() and ext not in constants.ALLOWED_EXTS:

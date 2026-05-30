@@ -1,12 +1,5 @@
 {
   "excluded_patterns": [
-    "_ADMIN",
-    "_REFERENCE",
-    "editorial",
-    "delivery",
-    "cameras",
-    "fx",
-    "audio",
     "assets"
   ],
   "studio_name": "TEST ANIMATION STUDIOS",
@@ -43,7 +36,11 @@
     "tharvard",
     "thavard",
     "tswift",
-    "gakpan"
+    "gakpan",
+    "145035",
+    "194839",
+    "210826",
+    "211828"
   ],
   "blast_player_path": "C:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastPlayer\\main.py",
   "window_geometry": {

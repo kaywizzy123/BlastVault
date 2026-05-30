@@ -105,3 +105,22 @@ def is_excluded(name):
         if fnmatch.fnmatch(name.lower(), pattern.lower()):
             return True
     return False
+
+
+def has_media_or_subfolders(path) -> bool:
+    """Return True if *path* has at least one subfolder or one media file as a direct child.
+
+    Passes:  pipeline folders (have sub-structure even if empty), media leaf folders.
+    Fails:   childless folders with no media (stray docs, notes, etc.).
+
+    Only direct children are scanned — no deep recursion — so it stays fast.
+    """
+    try:
+        for entry in Path(path).iterdir():
+            if entry.is_dir() and entry.name != ".meta" and not is_excluded(entry.name):
+                return True
+            if entry.is_file() and entry.suffix.lower() in constants.ALLOWED_EXTS:
+                return True
+    except (PermissionError, OSError):
+        pass
+    return False

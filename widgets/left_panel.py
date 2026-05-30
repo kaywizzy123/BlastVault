@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDir, QEvent, pyqtSignal
 
 from core import constants
-from core.config import is_excluded, save_config
+from core.config import is_excluded, save_config, has_media_or_subfolders
 from core.styles import context_menu_style
 from utils.icons import colored_icon
 from dialogs.add_catalog_dialog import AddCatalogDialog
@@ -108,6 +108,8 @@ class LeftPanel(QWidget):
 
         for folder in directory.entryInfoList():
             if folder.fileName() == ".meta" or is_excluded(folder.fileName()):
+                continue
+            if not has_media_or_subfolders(folder.absoluteFilePath()):
                 continue
             child = QTreeWidgetItem(parent_item, [folder.fileName()])
             child.setData(0, Qt.UserRole, folder.absoluteFilePath())
