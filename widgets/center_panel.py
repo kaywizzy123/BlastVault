@@ -925,7 +925,8 @@ class CenterPanel(QWidget):
         for i in range(self.list_widget.count()):
             item      = self.list_widget.item(i)
             is_folder = bool(item.data(Qt.UserRole + 1))
-            name_ok   = (text in item.text().lower()) if text else True
+            item_artist = (item.data(Qt.UserRole + 4) or "").lower()
+            name_ok   = (not text) or (text in item.text().lower()) or (text in item_artist)
             asset_key = item.data(Qt.UserRole + 3)   # None for non-SEQ items
 
             status = self._status_filter
