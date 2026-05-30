@@ -107,7 +107,7 @@ class LeftPanel(QWidget):
         directory.setSorting(QDir.Name)
 
         for folder in directory.entryInfoList():
-            if is_excluded(folder.fileName()):
+            if folder.fileName() == ".meta" or is_excluded(folder.fileName()):
                 continue
             child = QTreeWidgetItem(parent_item, [folder.fileName()])
             child.setData(0, Qt.UserRole, folder.absoluteFilePath())

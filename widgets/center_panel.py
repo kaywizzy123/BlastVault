@@ -705,7 +705,7 @@ class CenterPanel(QWidget):
         try:
             for root, dirs, files in os.walk(folder):
                 dirs[:] = sorted(
-                    [d for d in dirs if not is_excluded(d)],
+                    [d for d in dirs if d != ".meta" and not is_excluded(d)],
                     key=str.lower,
                 )
                 for fname in files:
