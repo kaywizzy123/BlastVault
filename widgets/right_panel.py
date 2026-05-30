@@ -12,7 +12,11 @@ from PyQt5.QtGui import QImageReader, QIcon
 from core import constants, styles
 from core.constants import detect_department, detect_artist, version_key, file_ctime
 from core.meta import read_meta_with_fallback, read_meta, write_meta
-from core.probe import probe_video, fmt_duration, fmt_resolution, fmt_fps, fmt_bitrate
+from core.probe import (
+    probe_video,
+    fmt_duration, fmt_resolution, fmt_fps, fmt_bitrate,
+    fmt_video_codec, fmt_audio_codec,
+)
 from utils.collapsible_btn import CollapsibleWidget
 
 
@@ -157,6 +161,16 @@ class RightPanel(QWidget):
         self.media_details_widget = CollapsibleWidget("Media Details")
         self.media_details_widget.set_expanded(True)
 
+        # ── Status History collapsible ────────────────────────────────────
+        self.history_widget = CollapsibleWidget("Status History")
+        # Starts collapsed — secondary info, expands on demand
+        self._history_container = QWidget()
+        self._history_container.setStyleSheet("background: transparent;")
+        self._history_layout = QVBoxLayout(self._history_container)
+        self._history_layout.setContentsMargins(0, 2, 0, 2)
+        self._history_layout.setSpacing(0)
+        self.history_widget.add_widget(self._history_container)
+
     def create_layout(self):
         # ── File Details form ────────────────────────────────────────────
         info_form = QFormLayout()
@@ -224,6 +238,7 @@ class RightPanel(QWidget):
         content_layout.setSpacing(0)
         content_layout.addWidget(self.file_details_widget)
         content_layout.addWidget(self.media_details_widget)
+        content_layout.addWidget(self.history_widget)
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(0, 4, 10, 0)
         btn_row.addStretch()
@@ -322,6 +337,9 @@ class RightPanel(QWidget):
         self.status_combo.blockSignals(False)
         self._set_status_badge_color(status)
 
+        # ── Status history ───────────────────────────────────────────────
+        self._load_history(meta.get("status_history", []))
+
         # ── Media metadata ───────────────────────────────────────────────
         for field in (self.resolution_details, self.fps_details, self.codec_details,
                       self.audio_details, self.bitrate_details,
@@ -370,6 +388,7 @@ class RightPanel(QWidget):
         self.status_combo.setCurrentIndex(0)
         self.status_combo.blockSignals(False)
         self._set_status_badge_color("")
+        self._load_history([])
         self._current_path = None
         self.content_widget.hide()
 
@@ -398,8 +417,8 @@ class RightPanel(QWidget):
         self.resolution_details.setText(res if res else "")
 
         self.fps_details.setText(fmt_fps(info["fps"]) if "fps" in info else "")
-        self.codec_details.setText(info.get("codec", ""))
-        self.audio_details.setText(info.get("audio_codec", ""))
+        self.codec_details.setText(fmt_video_codec(info.get("codec", "")))
+        self.audio_details.setText(fmt_audio_codec(info.get("audio_codec", "")))
         self.bitrate_details.setText(
             fmt_bitrate(info["bit_rate"]) if "bit_rate" in info else ""
         )
@@ -419,24 +438,37 @@ class RightPanel(QWidget):
         NotesDialog(str(self._current_path), parent=self).exec_()
 
     def _on_status_changed(self, status: str):
-        """Write the selected status to the .meta file immediately."""
+        """Write the selected status to .meta and record the change in history."""
         p = getattr(self, "_current_path", None)
         if p is None:
             return
+        new_status = status if status != "Clear Status" else ""
         self._set_status_badge_color(status)
         try:
-            # Merge with any existing meta so other fields are preserved
             data = read_meta(p)
-            if status and status != "Clear Status":
-                data["status"] = status
+            prev = data.get("status", "")
+
+            if new_status:
+                data["status"] = new_status
             else:
                 data.pop("status", None)
+
+            # Append a history entry only when the status actually changed
+            if new_status != prev:
+                history = data.get("status_history", [])
+                history.append({
+                    "status":    new_status,
+                    "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+                })
+                data["status_history"] = history
+
             write_meta(p, data)
+            self._load_history(data.get("status_history", []))
         except Exception as e:
             print(f"[RightPanel] Could not save status: {e}")
+
         # Notify the center panel so its badge updates without a reload
-        effective = status if status != "Clear Status" else ""
-        self.status_changed.emit(str(p), effective)
+        self.status_changed.emit(str(p), new_status)
 
     def _set_status_badge_color(self, status: str):
         """Paint the badge dot in the colour for *status*."""
@@ -444,6 +476,69 @@ class RightPanel(QWidget):
         self.status_badge.setStyleSheet(
             f"background-color: {color}; border-radius: 5px;"
         )
+
+    def _load_history(self, history: list):
+        """Rebuild the status history rows inside the collapsible (newest first)."""
+        # Clear existing rows
+        while self._history_layout.count():
+            item = self._history_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not history:
+            empty = QLabel("No history yet.")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setStyleSheet(
+                f"color: {constants.TEXT_SEC}; background: transparent;"
+                f"font-size: 11px; padding: 8px 0px;"
+            )
+            self._history_layout.addWidget(empty)
+            return
+
+        for entry in reversed(history):
+            s  = entry.get("status", "")
+            ts = entry.get("timestamp", "")
+
+            try:
+                dt       = datetime.datetime.fromisoformat(ts)
+                date_str = dt.strftime("%d %b  %H:%M")
+            except Exception:
+                date_str = ts
+
+            color = constants.STATUS_COLORS.get(s, constants.TEXT_SEC)
+
+            row = QWidget()
+            row.setStyleSheet("background: transparent;")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(6, 3, 6, 3)
+            rl.setSpacing(6)
+
+            dot = QLabel()
+            dot.setFixedSize(8, 8)
+            dot.setAttribute(Qt.WA_StyledBackground, True)
+            dot.setStyleSheet(
+                f"background-color: {color}; border-radius: 4px;"
+            )
+
+            status_lbl = QLabel(s if s else "—")
+            status_lbl.setFixedWidth(68)
+            status_lbl.setStyleSheet(
+                f"color: {color}; font-size: 12px; font-weight: bold;"
+                f"background: transparent;"
+            )
+
+            date_lbl = QLabel(date_str)
+            date_lbl.setStyleSheet(
+                f"color: {constants.TEXT_SEC}; font-size: 11px;"
+                f"background: transparent;"
+            )
+            date_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            rl.addWidget(dot)
+            rl.addWidget(status_lbl)
+            rl.addWidget(date_lbl, stretch=1)
+
+            self._history_layout.addWidget(row)
 
 
 

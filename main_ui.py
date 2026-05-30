@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
         self.header_widget.sort_changed.connect(self.center_panel.sort_items)
         self.center_panel.items_loaded.connect(self.footer.update_items)
         self.center_panel.selection_changed.connect(self.footer.update_selection)
+        self.center_panel.auto_refreshed.connect(self.footer.flash_auto_refresh)
         self.center_panel.file_selected.connect(self.right_panel.display_metadata)
         self.center_panel.seq_item_selected.connect(self.right_panel.set_seq_mode)
         self.right_panel.status_changed.connect(self.center_panel.update_item_status)

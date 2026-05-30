@@ -398,6 +398,7 @@ class CenterPanel(QWidget):
     seq_item_selected = pyqtSignal(bool)  # True when selected item is SEQ-level
     artists_found     = pyqtSignal(list)  # unique artist names in the loaded folder
     filters_cleared   = pyqtSignal()      # emitted when the "Clear filters" button is clicked
+    auto_refreshed    = pyqtSignal()      # emitted after a silent watch-folder auto-reload
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -566,9 +567,10 @@ class CenterPanel(QWidget):
     #  Public API                                                          #
     # ------------------------------------------------------------------ #
 
-    def load_folder(self, path: str):
-        self._show_loading()
-        QApplication.processEvents()   # let Qt render the indicator before blocking
+    def load_folder(self, path: str, _silent: bool = False):
+        if not _silent:
+            self._show_loading()
+            QApplication.processEvents()   # let Qt render the indicator before blocking
 
         # ── Accessibility pre-check (non-blocking, 3 s timeout) ───────────
         ok, err_title, err_msg = self._check_path(path)
@@ -587,10 +589,15 @@ class CenterPanel(QWidget):
             self.thumbnail_loader.terminate()
             self.thumbnail_loader.wait()
 
-        # Keep the watcher pointed at the new folder
+        # Keep the watcher pointed at the new folder.
+        # For SEQ folders also watch every subdirectory so that files dropped
+        # into shot sub-folders (e.g. SEQ_010/sh020/anim/) are detected.
         for old in self._watcher.directories():
             self._watcher.removePath(old)
         self._watcher.addPath(path)
+        _p = Path(path)
+        if _p.name.upper().startswith(("SEQ_", "SQ_", "SEQUENCE_")):
+            self._watch_subdirs(_p)
 
         icon_size = (
             (constants.GRID_ICON_W, constants.GRID_ICON_H)
@@ -1179,13 +1186,32 @@ class CenterPanel(QWidget):
         self._reload_timer.start()    # calling start() on a running timer resets it
 
     def _silent_reload(self):
-        """Reload the current folder while preserving the scroll position."""
+        """Reload the current folder with no loading flash, then signal the footer."""
         if not self.current_path:
             return
         sb  = self.list_widget.verticalScrollBar()
         pos = sb.value()
-        self.load_folder(self.current_path)
+        self.load_folder(self.current_path, _silent=True)
         sb.setValue(pos)
+        self.auto_refreshed.emit()
+
+    def _watch_subdirs(self, root: Path, max_depth: int = 3):
+        """Add every non-excluded subdirectory of *root* (up to *max_depth*
+        levels deep) to the watcher so changes inside shot folders trigger
+        a reload when the user is viewing a SEQ-level folder."""
+        def _walk(p: Path, depth: int):
+            if depth > max_depth:
+                return
+            try:
+                for entry in p.iterdir():
+                    if (entry.is_dir()
+                            and entry.name != ".meta"
+                            and not is_excluded(entry.name)):
+                        self._watcher.addPath(str(entry))
+                        _walk(entry, depth + 1)
+            except (PermissionError, OSError):
+                pass
+        _walk(root, 1)
 
     # ------------------------------------------------------------------ #
     #  Loading indicator                                                   #

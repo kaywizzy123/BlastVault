@@ -1,9 +1,10 @@
 ﻿import sys
+import datetime
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 from core import constants
 
@@ -24,12 +25,26 @@ class FooterWidget(QWidget):
         self.selected_label = QLabel("Selected: 0")
         self.selected_label.setStyleSheet(_style)
 
+        # ── Auto-refresh indicator ───────────────────────────────────────
+        self._refresh_label = QLabel()
+        self._refresh_label.setStyleSheet(
+            f"background: transparent; color: {constants.SUCCESS}; font-size: 12px;"
+        )
+        self._refresh_label.setVisible(False)
+
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(3000)
+        self._refresh_timer.timeout.connect(lambda: self._refresh_label.setVisible(False))
+
     def create_layout(self):
         self.main_layout = QHBoxLayout(self)
         self.main_layout.setContentsMargins(10, 0, 10, 0)
         self.main_layout.setSpacing(0)
         self.main_layout.addWidget(self.items_label)
         self.main_layout.addStretch()
+        self.main_layout.addWidget(self._refresh_label)
+        self.main_layout.addSpacing(16)
         self.main_layout.addWidget(self.selected_label)
 
     def create_connections(self):
@@ -41,6 +56,13 @@ class FooterWidget(QWidget):
 
     def update_selection(self, count):
         self.selected_label.setText(f"Selected: {count}")
+
+    def flash_auto_refresh(self):
+        """Show a brief '↻ Auto-refreshed HH:MM' message in the footer."""
+        now = datetime.datetime.now().strftime("%H:%M")
+        self._refresh_label.setText(f"↻  Auto-refreshed  {now}   ")
+        self._refresh_label.setVisible(True)
+        self._refresh_timer.start()   # restart if already running
 
 
 if __name__ == "__main__":

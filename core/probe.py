@@ -213,3 +213,92 @@ def fmt_bitrate(bps: int) -> str:
         val = bps / 1_000
         return f"{val:g} Kbps"
     return f"{bps} bps"
+
+
+# ── Codec display maps ────────────────────────────────────────────────────── #
+
+_VIDEO_CODEC_NAMES: dict[str, str] = {
+    # H.26x
+    "h264":         "H.264",
+    "hevc":         "H.265 / HEVC",
+    "h263":         "H.263",
+    "h263p":        "H.263+",
+    # ProRes / DNx
+    "prores":       "Apple ProRes",
+    "prores_ks":    "Apple ProRes",
+    "dnxhd":        "Avid DNxHD",
+    "dnxhr":        "Avid DNxHR",
+    # AV1 / VP
+    "av1":          "AV1",
+    "vp8":          "VP8",
+    "vp9":          "VP9",
+    # MPEG
+    "mpeg1video":   "MPEG-1",
+    "mpeg2video":   "MPEG-2",
+    "mpeg4":        "MPEG-4",
+    "msmpeg4v3":    "MS MPEG-4 v3",
+    # Motion JPEG / uncompressed
+    "mjpeg":        "Motion JPEG",
+    "rawvideo":     "Uncompressed",
+    "v210":         "Uncompressed 10-bit",
+    # Windows Media / other
+    "wmv1":         "WMV1",
+    "wmv2":         "WMV2",
+    "wmv3":         "WMV3 / VC-1",
+    "vc1":          "VC-1",
+    "theora":       "Theora",
+    "cinepak":      "Cinepak",
+    "gif":          "GIF",
+    "png":          "PNG",
+    "tiff":         "TIFF",
+}
+
+_AUDIO_CODEC_NAMES: dict[str, str] = {
+    # Uncompressed PCM
+    "pcm_s16le":    "PCM 16-bit (Uncompressed)",
+    "pcm_s16be":    "PCM 16-bit (Uncompressed)",
+    "pcm_s24le":    "PCM 24-bit (Uncompressed)",
+    "pcm_s24be":    "PCM 24-bit (Uncompressed)",
+    "pcm_s32le":    "PCM 32-bit (Uncompressed)",
+    "pcm_s32be":    "PCM 32-bit (Uncompressed)",
+    "pcm_f32le":    "PCM 32-bit Float",
+    "pcm_f32be":    "PCM 32-bit Float",
+    "pcm_f64le":    "PCM 64-bit Float",
+    "pcm_f64be":    "PCM 64-bit Float",
+    "pcm_mulaw":    "PCM μ-law",
+    "pcm_alaw":     "PCM A-law",
+    # Compressed
+    "aac":          "AAC",
+    "mp3":          "MP3",
+    "mp2":          "MP2",
+    "ac3":          "Dolby AC-3",
+    "eac3":         "Dolby E-AC-3",
+    "truehd":       "Dolby TrueHD",
+    "dts":          "DTS",
+    "flac":         "FLAC (Lossless)",
+    "alac":         "ALAC (Apple Lossless)",
+    "vorbis":       "Vorbis",
+    "opus":         "Opus",
+    "wmav1":        "WMA v1",
+    "wmav2":        "WMA v2",
+    "wmalossless":  "WMA Lossless",
+    "adpcm_ms":     "ADPCM",
+}
+
+
+def fmt_video_codec(raw: str) -> str:
+    """Return a human-readable video codec label for a raw ffprobe codec name.
+
+    Falls back to the uppercased raw string when the codec is not in the map.
+    Example: ``"h264"  →  "H.264"``
+    """
+    return _VIDEO_CODEC_NAMES.get(raw.lower(), raw.upper()) if raw else ""
+
+
+def fmt_audio_codec(raw: str) -> str:
+    """Return a human-readable audio codec label for a raw ffprobe codec name.
+
+    Falls back to the uppercased raw string when the codec is not in the map.
+    Example: ``"pcm_s16le"  →  "PCM 16-bit (Uncompressed)"``
+    """
+    return _AUDIO_CODEC_NAMES.get(raw.lower(), raw.upper()) if raw else ""
