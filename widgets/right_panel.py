@@ -72,6 +72,58 @@ def _fmt_size(n: int) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
+#  Drag-resize handle                                                           #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+class _DragHandle(QFrame):
+    """A thin horizontal grip the user can drag to resize *target* vertically.
+
+    Drag down → taller  |  Drag up → shorter
+    """
+
+    _MIN_H = 60
+    _MAX_H = 500
+
+    def __init__(self, target: QScrollArea, parent=None):
+        super().__init__(parent)
+        self._target  = target
+        self._drag_y  = None
+        self._start_h = None
+
+        self.setFixedHeight(6)
+        self.setCursor(Qt.SizeVerCursor)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {constants.SPLITTER_COLOR};
+                border-radius: 3px;
+                margin: 0px 40px;
+            }}
+            QFrame:hover {{
+                background-color: {constants.ACCENT_HI};
+            }}
+        """)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_y  = event.globalY()
+            self._start_h = self._target.height()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_y is not None:
+            delta = event.globalY() - self._drag_y
+            new_h = max(self._MIN_H, min(self._MAX_H, self._start_h + delta))
+            self._target.setFixedHeight(int(new_h))
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_y  = None
+        self._start_h = None
+        super().mouseReleaseEvent(event)
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
 #  RightPanel                                                                   #
 # ──────────────────────────────────────────────────────────────────────────── #
 
@@ -166,23 +218,39 @@ class RightPanel(QWidget):
         self.history_widget = CollapsibleWidget("Status History")
         # Starts collapsed — secondary info, expands on demand
         self._history_container = QWidget()
-        self._history_container.setStyleSheet("background: transparent;")
+        self._history_container.setStyleSheet(
+            f"background-color: {constants.BORDER};"
+        )
         self._history_layout = QVBoxLayout(self._history_container)
-        self._history_layout.setContentsMargins(0, 2, 0, 2)
+        self._history_layout.setContentsMargins(4, 4, 4, 4)
         self._history_layout.setSpacing(0)
 
-        # Wrap in a capped scroll area so many entries don't push the
-        # notes button off screen — scrollbar appears when content overflows.
+        # Wrap in a scroll area — height is user-adjustable via the drag handle below.
         self._history_scroll = QScrollArea()
         self._history_scroll.setWidget(self._history_container)
         self._history_scroll.setWidgetResizable(True)
         self._history_scroll.setFrameShape(QFrame.NoFrame)
         self._history_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._history_scroll.setMaximumHeight(250)   # updated dynamically in resizeEvent
-        self._history_scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-        )
-        self.history_widget.add_widget(self._history_scroll)
+        self._history_scroll.setFixedHeight(150)   # user can drag the handle to resize
+        self._history_scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {constants.BORDER};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
+            }}
+        """)
+
+        # Drag handle sits directly below the scroll box
+        self._history_drag = _DragHandle(self._history_scroll)
+
+        _history_box = QWidget()
+        _history_box.setStyleSheet("background: transparent;")
+        _hb = QVBoxLayout(_history_box)
+        _hb.setContentsMargins(0, 0, 0, 4)
+        _hb.setSpacing(3)
+        _hb.addWidget(self._history_scroll)
+        _hb.addWidget(self._history_drag)
+        self.history_widget.add_widget(_history_box)
 
     def create_layout(self):
         # ── File Details form ────────────────────────────────────────────
@@ -531,6 +599,7 @@ class RightPanel(QWidget):
                 f"font-size: 11px; padding: 8px 0px;"
             )
             self._history_layout.addWidget(empty)
+            self._history_layout.addStretch()
             return
 
         for entry in reversed(history):
@@ -578,15 +647,8 @@ class RightPanel(QWidget):
 
             self._history_layout.addWidget(row)
 
-
-
-    def resizeEvent(self, event):
-        """Keep history scroll area proportional to the panel's actual height."""
-        super().resizeEvent(event)
-        # ~28 % of panel height, clamped between 120 px (usable on small screens)
-        # and 250 px (avoids dominating the panel on large monitors).
-        h = max(120, min(250, int(self.height() * 0.28)))
-        self._history_scroll.setMaximumHeight(h)
+        # Stretch absorbs leftover space so rows keep their natural height
+        self._history_layout.addStretch()
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ import datetime
 from pathlib import Path
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QTextEdit,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QPushButton, QComboBox, QFrame, QScrollArea, QWidget,
 )
 from PyQt5.QtCore import Qt
@@ -169,28 +169,6 @@ class SubmitReviewDialog(QDialog):
         self._no_sessions_lbl.setVisible(False)
         outer.addWidget(self._no_sessions_lbl)
 
-        # ── Your name ─────────────────────────────────────────────────────
-        name_lbl = QLabel("Your Name")
-        name_lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
-        )
-        outer.addWidget(name_lbl)
-
-        self._name_field = QLineEdit()
-        self._name_field.setText(constants.CURRENT_USER)
-        self._name_field.setPlaceholderText("e.g.  oogunremi")
-        self._name_field.setFixedHeight(34)
-        self._name_field.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: {constants.BG};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px; padding: 4px 10px; font-size: 13px;
-            }}
-            QLineEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
-        """)
-        outer.addWidget(self._name_field)
-
         # ── Note (optional) ───────────────────────────────────────────────
         note_lbl = QLabel("Note  (optional)")
         note_lbl.setStyleSheet(
@@ -211,16 +189,6 @@ class SubmitReviewDialog(QDialog):
             QTextEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
         """)
         outer.addWidget(self._note_field)
-
-        # ── Error label ───────────────────────────────────────────────────
-        self._error_lbl = QLabel()
-        self._error_lbl.setAlignment(Qt.AlignCenter)
-        self._error_lbl.setFixedHeight(16)
-        self._error_lbl.setStyleSheet(
-            f"color: {constants.FAIL}; font-size: 11px; background: transparent;"
-        )
-        self._error_lbl.setVisible(False)
-        outer.addWidget(self._error_lbl)
 
         # ── Buttons ───────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
@@ -342,11 +310,6 @@ class SubmitReviewDialog(QDialog):
         return True
 
     def _on_submit(self):
-        name = self._name_field.text().strip()
-        if not name:
-            self._error_lbl.setText("Please enter your name.")
-            self._error_lbl.setVisible(True)
-            return
         if not self._sessions:
             return
 
@@ -358,7 +321,7 @@ class SubmitReviewDialog(QDialog):
         items = [
             {
                 "file_path":       fp,
-                "submitted_by":    name,
+                "submitted_by":    constants.CURRENT_USER,
                 "submission_note": note,
             }
             for fp in self._file_paths
