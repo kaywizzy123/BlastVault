@@ -27,6 +27,8 @@ def load_config():
                 data.get("admin_pin_hash")
                 or data.get("supervisor_pin_hash", "")
             )
+            if "review_types" in data:
+                constants.REVIEW_TYPES = data["review_types"]
 
             # Tools
             if "blast_player_path" in data:
@@ -64,6 +66,7 @@ def save_config(catalog_paths=None):
         existing["blast_player_path"]   = str(constants.BLAST_PLAYER_PATH)
         existing["admin_pin_hash"] = constants.ADMIN_PIN_HASH
         existing.pop("supervisor_pin_hash", None)   # remove legacy key
+        existing["review_types"]  = constants.REVIEW_TYPES
         # ffmpeg_path is intentionally NOT saved — it is auto-detected at
         # startup via shutil.which so it always reflects the current machine.
         existing.pop("ffmpeg_path", None)   # clean up any legacy value

@@ -90,6 +90,15 @@ ADMIN_PIN_HASH: str = ""
 # Runtime lock state — True = locked (default), False = admin unlocked.
 STATUS_LOCKED: bool = True
 
+# Review session types — user-defined, admin-only to modify.
+REVIEW_TYPES: list[str] = [
+    "Director Dailies",
+    "Head of Animation Rounds",
+    "Supervisor Review",
+    "CG Supervisor Review",
+    "Final Review",
+]
+
 GRID_ICON_W    = 180          # icon width  — 16:9 asset grid
 GRID_ICON_H    = 102          # icon height — ≈ 16:9 of width (180 × 9/16 ≈ 101)
 GRID_ICON_SIZE = GRID_ICON_W  # kept for thumbnail-loader / icon-builder compat

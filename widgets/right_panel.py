@@ -240,7 +240,8 @@ class RightPanel(QWidget):
         content_layout.addWidget(self.media_details_widget)
         content_layout.addWidget(self.history_widget)
         btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 4, 10, 0)
+        btn_row.setContentsMargins(10, 4, 10, 0)
+        btn_row.setSpacing(8)
         btn_row.addStretch()
         btn_row.addWidget(self.notes_btn)
         content_layout.addLayout(btn_row)
@@ -256,15 +257,28 @@ class RightPanel(QWidget):
     #  Public API                                                          #
     # ------------------------------------------------------------------ #
 
+    def refresh_if_current(self, path: str):
+        """Re-load metadata only if *path* is the file currently displayed."""
+        if self._current_path is not None and str(self._current_path) == path:
+            self.display_metadata(path)
+
     def set_status_locked(self, locked: bool):
-        """Toggle between supervisor combo and artist submit button."""
+        """Lock/unlock the status combo.
+
+        The submit-to-review button is intentionally unaffected — all users
+        (artists included) can submit shots regardless of the admin lock state.
+        """
         self.status_combo.setEnabled(not locked)
         self.status_combo.setToolTip(
             "Status locked  —  unlock via the padlock in the header" if locked else ""
         )
 
     def set_seq_mode(self, is_seq: bool):
-        """Hide the status row when showing a SEQ-level item."""
+        """Hide per-file controls when showing a SEQ-level aggregate item.
+
+        SEQ items represent a folder grouping, not a single submittable file,
+        so both the status row and the submit button are hidden.
+        """
         self._status_label.setVisible(not is_seq)
         self._status_row_widget.setVisible(not is_seq)
 

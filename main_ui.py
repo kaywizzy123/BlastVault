@@ -4,6 +4,7 @@ import hashlib
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QSplitter, QAction,
+    QDialog,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
@@ -65,6 +66,8 @@ class MainWindow(QMainWindow):
         menu_menu = mb.addMenu("Menu")
         self.add_catalog_action = menu_menu.addAction("Add Catalog")
         self.remove_catalog_action = menu_menu.addAction("Remove Catalog")
+        menu_menu.addSeparator()
+        self.review_sessions_action = menu_menu.addAction("Review Sessions…")
 
         options_menu = mb.addMenu("Options")
         self.settings_action = options_menu.addAction("Settings")
@@ -108,6 +111,7 @@ class MainWindow(QMainWindow):
     def create_connections(self):
         self.about_action.triggered.connect(self.show_about)
         self.settings_action.triggered.connect(self.show_settings)
+        self.review_sessions_action.triggered.connect(self.show_reviews)
         self.add_catalog_action.triggered.connect(self.left_panel.add_catalog)
         self.remove_catalog_action.triggered.connect(self.left_panel.remove_catalog)
         self.left_panel.folder_selected.connect(self.on_folder_selected)
@@ -132,6 +136,8 @@ class MainWindow(QMainWindow):
         self.right_panel.set_status_locked(True)
         self.center_panel.filters_cleared.connect(self.on_filters_cleared)
         self.header_widget.status_changed.connect(self.center_panel.filter_status)
+        # Review submission from center panel context menu
+        self.center_panel.submit_review_requested.connect(self._on_submit_review)
 
     def on_folder_selected(self, path):
         self.header_widget.search_bar.clear()
@@ -149,6 +155,69 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self)
         dialog.settings_changed.connect(self.on_settings_changed)
         dialog.exec_()
+
+    def show_reviews(self):
+        """Open the Review Sessions manager for the current catalog root."""
+        from dialogs.review_manager_dialog import ReviewManagerDialog
+        root = self._current_catalog_root()
+        if not root:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self, "Review Sessions",
+                "Please select a catalog folder first."
+            )
+            return
+        dlg = ReviewManagerDialog(root, parent=self)
+        dlg.item_reviewed.connect(
+            lambda fp, *_: self.right_panel.refresh_if_current(fp)
+        )
+        dlg.exec_()
+
+    def _current_catalog_root(self) -> str:
+        """Return the catalog root that contains the currently viewed folder.
+
+        Falls back to the first catalog if nothing is loaded, or empty string
+        when no catalogs are configured.
+        """
+        from core.reviews import find_catalog_root
+        current = self.center_panel.current_path
+        catalogs = self.left_panel.get_catalog_paths()
+        if current and catalogs:
+            root = find_catalog_root(current, catalogs)
+            if root:
+                return root
+        # Fallback: first catalog
+        if catalogs:
+            return catalogs[0]
+        return ""
+
+    def _on_submit_review(self, file_paths: list):
+        """Show the submit-to-review dialog for *file_paths*."""
+        from PyQt5.QtWidgets import QMessageBox
+        from dialogs.submit_review_dialog import SubmitReviewDialog
+        try:
+            if not file_paths:
+                return
+            root = self._current_catalog_root()
+            if not root:
+                QMessageBox.warning(
+                    self, "Submit for Review",
+                    "No catalog is configured.\n"
+                    "Add a catalog via Menu → Add Catalog first."
+                )
+                return
+            dlg = SubmitReviewDialog(file_paths, root, parent=self)
+            if dlg.exec_() == QDialog.Accepted:
+                # Refresh badges — status was set to "Review" inside the dialog
+                if self.center_panel.current_path:
+                    self.center_panel.load_folder(
+                        self.center_panel.current_path, _silent=True
+                    )
+        except Exception as exc:
+            QMessageBox.critical(
+                self, "Submit for Review — Error",
+                f"An unexpected error occurred:\n\n{exc}"
+            )
 
     def on_filters_cleared(self):
         """Reset all header filter controls to their default 'All'/empty state."""

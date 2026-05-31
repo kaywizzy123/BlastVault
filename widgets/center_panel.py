@@ -391,14 +391,15 @@ class VersionHistoryPopup(QWidget):
 # ──────────────────────────────────────────────────────────────────────────── #
 
 class CenterPanel(QWidget):
-    folder_changed    = pyqtSignal(str)
-    items_loaded      = pyqtSignal(int)
-    selection_changed = pyqtSignal(int)
-    file_selected     = pyqtSignal(str)   # single file path, or "" if none/multi
-    seq_item_selected = pyqtSignal(bool)  # True when selected item is SEQ-level
-    artists_found     = pyqtSignal(list)  # unique artist names in the loaded folder
-    filters_cleared   = pyqtSignal()      # emitted when the "Clear filters" button is clicked
-    auto_refreshed    = pyqtSignal()      # emitted after a silent watch-folder auto-reload
+    folder_changed         = pyqtSignal(str)
+    items_loaded           = pyqtSignal(int)
+    selection_changed      = pyqtSignal(int)
+    file_selected          = pyqtSignal(str)   # single file path, or "" if none/multi
+    seq_item_selected      = pyqtSignal(bool)  # True when selected item is SEQ-level
+    artists_found          = pyqtSignal(list)  # unique artist names in the loaded folder
+    filters_cleared        = pyqtSignal()      # emitted when the "Clear filters" button is clicked
+    auto_refreshed         = pyqtSignal()      # emitted after a silent watch-folder auto-reload
+    submit_review_requested = pyqtSignal(list) # list of file paths to submit for review
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1411,16 +1412,19 @@ class CenterPanel(QWidget):
         QApplication.clipboard().setText(text)
 
     def _submit_for_review(self, paths: list):
-        """Set status to 'Review' for *paths*, skipping any already Approved."""
-        eligible = []
-        path_set = set(paths)
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            if item.data(Qt.UserRole) in path_set:
-                if (item.data(Qt.UserRole + 5) or "") != "Approved":
-                    eligible.append(item.data(Qt.UserRole))
+        """Emit submit_review_requested for *paths*, skipping already-Approved items.
+
+        Paths are passed directly from the context menu (which already read them
+        from the list widget), so we do not re-iterate the list widget — that
+        avoids any path-string normalisation mismatches that would silently
+        produce an empty eligible list.
+        """
+        # The single-file context menu item is already disabled for Approved shots.
+        # The multi-select path was already filtered to exclude Approved items.
+        # Just strip any None/empty values and emit.
+        eligible = [p for p in paths if p]
         if eligible:
-            self._set_status(eligible, "Review")
+            self.submit_review_requested.emit(eligible)
 
     def _set_status(self, paths: list, status: str):
         """Write *status* to each file in *paths* and refresh the badge.

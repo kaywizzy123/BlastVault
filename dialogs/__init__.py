@@ -5,3 +5,6 @@ from .about_dialog import AboutDialog
 from .first_run_dialog import FirstRunDialog
 from .notes_dialog import NotesDialog
 from .pin_dialog import PinInputDialog, PinSetupDialog
+from .submit_review_dialog import SubmitReviewDialog
+from .review_manager_dialog import ReviewManagerDialog
+from .review_session_dialog import ReviewSessionDialog

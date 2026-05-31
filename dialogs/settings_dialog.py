@@ -164,6 +164,59 @@ class SettingsDialog(QDialog):
         self.artist_down_btn.setToolTip("Move down")
         self.artist_down_btn.setStyleSheet(self._btn_style())
 
+        # ── Reviews tab ──────────────────────────────────────────────────
+        self.review_section_label = QLabel("Review Session Types")
+        self.review_section_label.setStyleSheet(self._section_style())
+
+        self.review_hint_label = QLabel(
+            "These types appear when creating a new review session.\n"
+            "Admin-only — changes require the admin PIN to take effect at runtime."
+        )
+        self.review_hint_label.setStyleSheet(self._hint_style())
+
+        self.review_list = QListWidget()
+        self.review_list.setStyleSheet(dialog_list_style())
+        self.review_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._populate_review_list()
+
+        self.review_input = QLineEdit()
+        self.review_input.setPlaceholderText("Enter session type (e.g. Director Dailies)")
+        self.review_input.setStyleSheet(input_style())
+
+        self.review_add_btn = QPushButton()
+        self.review_add_btn.setIcon(QIcon(str(constants.ICONS_DIR / "plus.png")))
+        self.review_add_btn.setIconSize(QSize(12, 12))
+        self.review_add_btn.setStyleSheet(self._btn_style())
+
+        self.review_remove_btn = QPushButton("Remove Selected")
+        self.review_remove_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+
+        self.review_up_btn = QPushButton()
+        self.review_up_btn.setIcon(QIcon(str(constants.ICONS_DIR / "caret-arrow-up.png")))
+        self.review_up_btn.setIconSize(QSize(14, 14))
+        self.review_up_btn.setFixedWidth(36)
+        self.review_up_btn.setToolTip("Move up")
+        self.review_up_btn.setStyleSheet(self._btn_style())
+
+        self.review_down_btn = QPushButton()
+        self.review_down_btn.setIcon(QIcon(str(constants.ICONS_DIR / "down.png")))
+        self.review_down_btn.setIconSize(QSize(14, 14))
+        self.review_down_btn.setFixedWidth(36)
+        self.review_down_btn.setToolTip("Move down")
+        self.review_down_btn.setStyleSheet(self._btn_style())
+
+        # Disable review tab controls if not admin
+        _locked = constants.STATUS_LOCKED
+        for w in (self.review_input, self.review_add_btn,
+                  self.review_remove_btn, self.review_up_btn, self.review_down_btn):
+            w.setEnabled(not _locked)
+
+        self.review_locked_lbl = QLabel("🔒  Unlock admin mode to edit session types.")
+        self.review_locked_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
+        )
+        self.review_locked_lbl.setVisible(_locked)
+
         # ── Tools tab ────────────────────────────────────────────────────
         self.ffmpeg_section_label = QLabel("FFmpeg")
         self.ffmpeg_section_label.setStyleSheet(self._section_style())
@@ -386,6 +439,35 @@ class SettingsDialog(QDialog):
 
         tools.addStretch()
 
+        # ── Reviews tab ──────────────────────────────────────────────────
+        reviews_tab = QWidget()
+        reviews = QVBoxLayout(reviews_tab)
+        reviews.setContentsMargins(15, 15, 15, 15)
+        reviews.setSpacing(10)
+
+        reviews.addWidget(self.review_section_label)
+        reviews.addWidget(self.review_hint_label)
+        reviews.addWidget(self.review_locked_lbl)
+
+        rev_list_row = QHBoxLayout()
+        rev_list_row.addWidget(self.review_list)
+
+        rev_arrow_col = QVBoxLayout()
+        rev_arrow_col.setSpacing(4)
+        rev_arrow_col.addWidget(self.review_up_btn)
+        rev_arrow_col.addWidget(self.review_down_btn)
+        rev_arrow_col.addStretch()
+        rev_list_row.addLayout(rev_arrow_col)
+        reviews.addLayout(rev_list_row)
+
+        rev_add_row = QHBoxLayout()
+        rev_add_row.addWidget(self.review_input)
+        rev_add_row.addWidget(self.review_add_btn)
+        reviews.addLayout(rev_add_row)
+
+        reviews.addWidget(self.review_remove_btn)
+        reviews.addStretch()
+
         # ── Tab widget ───────────────────────────────────────────────────
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet(f"""
@@ -412,6 +494,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(general_tab,  "General")
         self.tabs.addTab(dept_tab,     "Departments")
         self.tabs.addTab(artist_tab,   "Artists")
+        self.tabs.addTab(reviews_tab,  "Reviews")
         self.tabs.addTab(tools_tab,    "Tools")
 
         # ── Main dialog layout ───────────────────────────────────────────
@@ -452,6 +535,13 @@ class SettingsDialog(QDialog):
         self.artist_up_btn.clicked.connect(self._on_artist_move_up)
         self.artist_down_btn.clicked.connect(self._on_artist_move_down)
         self.artist_input.returnPressed.connect(self._on_artist_add)
+
+        # Reviews
+        self.review_add_btn.clicked.connect(self._on_review_type_add)
+        self.review_remove_btn.clicked.connect(self._on_review_type_remove)
+        self.review_up_btn.clicked.connect(self._on_review_type_move_up)
+        self.review_down_btn.clicked.connect(self._on_review_type_move_down)
+        self.review_input.returnPressed.connect(self._on_review_type_add)
 
         # Tools
         self.ffmpeg_test_btn.clicked.connect(self._on_test_ffmpeg)
@@ -567,6 +657,42 @@ class SettingsDialog(QDialog):
         self.artist_list.setCurrentRow(row + 1)
 
     # ------------------------------------------------------------------ #
+    #  Reviews tab slots                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _on_review_type_add(self):
+        text = self.review_input.text().strip()
+        if not text:
+            return
+        existing = [
+            self.review_list.item(i).text()
+            for i in range(self.review_list.count())
+        ]
+        if text not in existing:
+            self.review_list.addItem(QListWidgetItem(text))
+        self.review_input.clear()
+
+    def _on_review_type_remove(self):
+        for item in self.review_list.selectedItems():
+            self.review_list.takeItem(self.review_list.row(item))
+
+    def _on_review_type_move_up(self):
+        row = self.review_list.currentRow()
+        if row <= 0:
+            return
+        item = self.review_list.takeItem(row)
+        self.review_list.insertItem(row - 1, item)
+        self.review_list.setCurrentRow(row - 1)
+
+    def _on_review_type_move_down(self):
+        row = self.review_list.currentRow()
+        if row < 0 or row >= self.review_list.count() - 1:
+            return
+        item = self.review_list.takeItem(row)
+        self.review_list.insertItem(row + 1, item)
+        self.review_list.setCurrentRow(row + 1)
+
+    # ------------------------------------------------------------------ #
     #  Tools tab slots                                                     #
     # ------------------------------------------------------------------ #
 
@@ -646,6 +772,7 @@ class SettingsDialog(QDialog):
             self._populate_pattern_list()
             self._populate_dept_list()
             self._populate_artist_list()
+            self._populate_review_list()
             self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
             self.studio_root_lineEdit.setText(constants.ROOT_DIR)
             self.player_path_edit.setText(str(constants.BLAST_PLAYER_PATH))
@@ -687,6 +814,13 @@ class SettingsDialog(QDialog):
             self.artist_list.item(i).text()
             for i in range(self.artist_list.count())
         ]
+
+        # Review types (admin only — list may be disabled but values are preserved)
+        if not constants.STATUS_LOCKED:
+            constants.REVIEW_TYPES = [
+                self.review_list.item(i).text()
+                for i in range(self.review_list.count())
+            ]
 
         # Tools
         player = self.player_path_edit.text().strip()
@@ -762,6 +896,11 @@ class SettingsDialog(QDialog):
     # ------------------------------------------------------------------ #
     #  Helpers                                                             #
     # ------------------------------------------------------------------ #
+
+    def _populate_review_list(self):
+        self.review_list.clear()
+        for rt in constants.REVIEW_TYPES:
+            self.review_list.addItem(QListWidgetItem(rt))
 
     def _populate_pattern_list(self):
         self.pattern_list.clear()
