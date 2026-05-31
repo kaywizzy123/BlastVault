@@ -19,7 +19,7 @@ class FirstRunDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Welcome to BlastVault")
-        self.setFixedSize(520, 400)
+        self.setFixedSize(520, 450)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.create_widgets()
@@ -53,15 +53,35 @@ class FirstRunDialog(QDialog):
 
         # Sub-text
         self.sub_label = QLabel(
-            "Before you get started, give your studio a name and tell\n"
-            "BlastVault where your files live. You can change both\n"
-            "at any time in Options → Settings."
+            "Before you get started, set up your profile and tell\n"
+            "BlastVault where your files live. You can change all of\n"
+            "this at any time in Options → Settings."
         )
         self.sub_label.setAlignment(Qt.AlignCenter)
         self.sub_label.setStyleSheet(f"""
             font-size: 12px;
             color: {constants.TEXT_SEC};
             background: transparent;
+        """)
+
+        # Your name field
+        self.user_name_label = QLabel("Your Name:")
+        self.user_name_label.setStyleSheet(f"color: {constants.TEXT_PRI}; background: transparent;")
+
+        self.user_name_lineEdit = QLineEdit()
+        self.user_name_lineEdit.setText(constants.CURRENT_USER)
+        self.user_name_lineEdit.setPlaceholderText("e.g.  oogunremi")
+        self.user_name_lineEdit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {constants.BORDER};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
+                padding: 4px 8px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {constants.ACCENT};
+            }}
         """)
 
         # Studio name field
@@ -166,6 +186,11 @@ class FirstRunDialog(QDialog):
         layout.addWidget(self.sub_label)
         layout.addSpacing(8)
 
+        layout.addWidget(self.user_name_label)
+        layout.addWidget(self.user_name_lineEdit)
+
+        layout.addSpacing(4)
+
         layout.addWidget(self.name_label)
         layout.addWidget(self.name_lineEdit)
 
@@ -203,6 +228,9 @@ class FirstRunDialog(QDialog):
             self.root_lineEdit.setText(path)
 
     def _on_confirm(self):
+        user = self.user_name_lineEdit.text().strip()
+        if user:
+            constants.CURRENT_USER = user
         name = self.name_lineEdit.text().strip()
         if name:
             constants.STUDIO_NAME = name

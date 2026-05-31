@@ -36,6 +36,12 @@ class SettingsDialog(QDialog):
 
     def create_widgets(self):
         # ── General tab ─────────────────────────────────────────────────
+        self.user_name_label    = QLabel("Your Name:")
+        self.user_name_lineEdit = QLineEdit()
+        self.user_name_lineEdit.setText(constants.CURRENT_USER)
+        self.user_name_lineEdit.setPlaceholderText("e.g.  oogunremi")
+        self.user_name_lineEdit.setStyleSheet(self._input_style())
+
         self.studio_name_label    = QLabel("Studio Name:")
         self.studio_name_lineEdit = QLineEdit()
         self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
@@ -311,6 +317,11 @@ class SettingsDialog(QDialog):
         gen = QVBoxLayout(general_tab)
         gen.setContentsMargins(15, 15, 15, 15)
         gen.setSpacing(10)
+
+        user_row = QHBoxLayout()
+        user_row.addWidget(self.user_name_label)
+        user_row.addWidget(self.user_name_lineEdit)
+        gen.addLayout(user_row)
 
         name_row = QHBoxLayout()
         name_row.addWidget(self.studio_name_label)
@@ -773,6 +784,7 @@ class SettingsDialog(QDialog):
             self._populate_dept_list()
             self._populate_artist_list()
             self._populate_review_list()
+            self.user_name_lineEdit.setText(constants.CURRENT_USER)
             self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
             self.studio_root_lineEdit.setText(constants.ROOT_DIR)
             self.player_path_edit.setText(str(constants.BLAST_PLAYER_PATH))
@@ -796,6 +808,9 @@ class SettingsDialog(QDialog):
             self.pattern_list.item(i).text()
             for i in range(self.pattern_list.count())
         ]
+        user = self.user_name_lineEdit.text().strip()
+        if user:
+            constants.CURRENT_USER = user
         constants.STUDIO_NAME = (
             self.studio_name_lineEdit.text().strip() or constants.STUDIO_NAME
         )

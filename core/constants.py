@@ -1,11 +1,15 @@
 import re as _re
 import shutil as _shutil
 import sys as _sys
+import getpass as _getpass
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 
-STUDIO_NAME = "INDIE ANIMATION STUDIOS"
+STUDIO_NAME  = "INDIE ANIMATION STUDIOS"
+# Artist's display name — defaults to the OS login so it works out-of-the-box.
+# Overridable via Settings → General and persisted to config.json.
+CURRENT_USER: str = _getpass.getuser()
 ICONS_DIR = _ROOT / "icons"
 ICON = str(ICONS_DIR / "bv.png")
 

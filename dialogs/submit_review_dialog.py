@@ -177,6 +177,7 @@ class SubmitReviewDialog(QDialog):
         outer.addWidget(name_lbl)
 
         self._name_field = QLineEdit()
+        self._name_field.setText(constants.CURRENT_USER)
         self._name_field.setPlaceholderText("e.g.  oogunremi")
         self._name_field.setFixedHeight(34)
         self._name_field.setStyleSheet(f"""

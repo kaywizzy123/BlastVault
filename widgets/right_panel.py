@@ -5,6 +5,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import (
     QFormLayout, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QTextEdit, QComboBox, QPushButton,
+    QScrollArea, QFrame,
 )
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QImageReader, QIcon
@@ -169,7 +170,19 @@ class RightPanel(QWidget):
         self._history_layout = QVBoxLayout(self._history_container)
         self._history_layout.setContentsMargins(0, 2, 0, 2)
         self._history_layout.setSpacing(0)
-        self.history_widget.add_widget(self._history_container)
+
+        # Wrap in a capped scroll area so many entries don't push the
+        # notes button off screen — scrollbar appears when content overflows.
+        self._history_scroll = QScrollArea()
+        self._history_scroll.setWidget(self._history_container)
+        self._history_scroll.setWidgetResizable(True)
+        self._history_scroll.setFrameShape(QFrame.NoFrame)
+        self._history_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._history_scroll.setMaximumHeight(250)   # updated dynamically in resizeEvent
+        self._history_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+        )
+        self.history_widget.add_widget(self._history_scroll)
 
     def create_layout(self):
         # ── File Details form ────────────────────────────────────────────
@@ -554,6 +567,15 @@ class RightPanel(QWidget):
 
             self._history_layout.addWidget(row)
 
+
+
+    def resizeEvent(self, event):
+        """Keep history scroll area proportional to the panel's actual height."""
+        super().resizeEvent(event)
+        # ~28 % of panel height, clamped between 120 px (usable on small screens)
+        # and 250 px (avoids dominating the panel on large monitors).
+        h = max(120, min(250, int(self.height() * 0.28)))
+        self._history_scroll.setMaximumHeight(h)
 
 
 if __name__ == "__main__":

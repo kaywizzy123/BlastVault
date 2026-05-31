@@ -407,11 +407,6 @@ class NotesDialog(QDialog):
         if not content:
             return
 
-        dlg = _AuthorInputDialog(self)
-        author, ok = dlg.get_author()
-        if not ok:
-            return
-
-        add_note(self._file_path, author, content)
+        add_note(self._file_path, constants.CURRENT_USER, content)
         self._note_input.clear()
         self._load_notes()

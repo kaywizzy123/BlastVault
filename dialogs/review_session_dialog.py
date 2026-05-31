@@ -468,7 +468,7 @@ class ReviewSessionDialog(QDialog):
                         # Mirror non-empty reviewer notes into the asset's
                         # notes log so they appear in NotesDialog.
                         if note:
-                            add_note(fp, "Reviewer",
+                            add_note(fp, constants.CURRENT_USER,
                                      f"[{review_status}]  {note}")
                         self.item_reviewed.emit(fp, review_status)
                     except Exception:

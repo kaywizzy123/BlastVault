@@ -13,6 +13,7 @@ def load_config():
 
             constants.EXCLUDED_PATTERNS = data.get("excluded_patterns", [])
             constants.STUDIO_NAME       = data.get("studio_name",  constants.STUDIO_NAME)
+            constants.CURRENT_USER      = data.get("current_user", constants.CURRENT_USER)
             constants.ROOT_DIR          = data.get("root_dir",     constants.ROOT_DIR)
             _REMOVED_DEPTS = {"Visual Development", "Modeling", "Rigging"}
             constants.DEPARTMENTS = [
@@ -60,6 +61,7 @@ def save_config(catalog_paths=None):
 
         existing["excluded_patterns"] = constants.EXCLUDED_PATTERNS
         existing["studio_name"]       = constants.STUDIO_NAME
+        existing["current_user"]      = constants.CURRENT_USER
         existing["root_dir"]          = constants.ROOT_DIR
         existing["departments"]       = constants.DEPARTMENTS
         existing["artists"]           = constants.ARTISTS
