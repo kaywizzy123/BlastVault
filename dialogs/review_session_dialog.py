@@ -286,8 +286,9 @@ class ReviewSessionDialog(QDialog):
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
 
-        # File name (bold)
-        fname = Path(file_path).name if file_path else "(unknown)"
+        # File name (bold) — normalise separators so Windows paths display
+        # correctly on macOS/Linux where \ is not a path separator.
+        fname = file_path.replace("\\", "/").split("/")[-1] if file_path else "(unknown)"
         name_lbl = QLabel(fname)
         name_lbl.setStyleSheet(
             f"color: {constants.TEXT_PRI}; font-size: 13px; font-weight: bold;"
