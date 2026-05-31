@@ -245,7 +245,6 @@ class RightPanel(QWidget):
 
         # ── Content container (hidden until a file is selected) ──────────
         self.content_widget = QWidget()
-        self.content_widget.hide()
         content_layout = QVBoxLayout(self.content_widget)
         content_layout.setContentsMargins(4, 4, 12, 12)
         content_layout.setSpacing(0)
@@ -260,11 +259,23 @@ class RightPanel(QWidget):
         content_layout.addLayout(btn_row)
         content_layout.addStretch()
 
+        # ── Full-panel scroll area ────────────────────────────────────────
+        # Wraps all content so nothing overlaps on small windows.
+        # History also has its own inner scroll (see above) for extra-long lists.
+        self._content_scroll = QScrollArea()
+        self._content_scroll.setWidget(self.content_widget)
+        self._content_scroll.setWidgetResizable(True)
+        self._content_scroll.setFrameShape(QFrame.NoFrame)
+        self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._content_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+        )
+        self._content_scroll.hide()
+
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
-        self.main_layout.addWidget(self.content_widget)
-        self.main_layout.addStretch()
+        self.main_layout.addWidget(self._content_scroll)
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #
@@ -390,7 +401,7 @@ class RightPanel(QWidget):
             self._start_probe(str(p))
 
         self._current_path = p
-        self.content_widget.show()
+        self._content_scroll.show()
 
     # ------------------------------------------------------------------ #
     #  Private helpers                                                     #
@@ -417,7 +428,7 @@ class RightPanel(QWidget):
         self._set_status_badge_color("")
         self._load_history([])
         self._current_path = None
-        self.content_widget.hide()
+        self._content_scroll.hide()
 
     # ------------------------------------------------------------------ #
     #  Background probe helpers                                            #

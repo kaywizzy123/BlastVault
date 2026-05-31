@@ -41,16 +41,16 @@
   ],
   "blast_player_path": "C:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastPlayer\\main.py",
   "window_geometry": {
-    "maximized": true,
+    "maximized": false,
     "x": 1270,
     "y": 396,
-    "width": 1291,
+    "width": 1270,
     "height": 600
   },
   "splitter_sizes": [
-    574,
-    2315,
-    547
+    208,
+    841,
+    217
   ],
   "admin_pin_hash": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5",
   "review_types": [
