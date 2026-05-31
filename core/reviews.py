@@ -187,6 +187,14 @@ def reopen_session(session_path: str | Path) -> None:
     write_session(session_path, data)
 
 
+def delete_session(session_path: str | Path) -> None:
+    """Permanently delete the session JSON file."""
+    try:
+        Path(session_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 # ── Catalog helpers ───────────────────────────────────────────────────────── #
 
 def find_catalog_root(file_path: str, catalog_roots: list[str]) -> str | None:

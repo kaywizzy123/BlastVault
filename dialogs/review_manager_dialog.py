@@ -20,7 +20,7 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtGui import QPixmap, QIcon
 
 from core import constants
-from core.reviews import list_sessions, create_session, mark_completed, reopen_session
+from core.reviews import list_sessions, create_session, mark_completed, reopen_session, delete_session
 from dialogs.submit_review_dialog import _PickSessionTypeDialog
 
 
@@ -307,6 +307,28 @@ class ReviewManagerDialog(QDialog):
             )
             rl.addWidget(reopen_btn)
 
+        # Delete button — always shown, admin + confirmation required on click
+        del_btn = QPushButton()
+        del_btn.setIcon(QIcon(str(constants.ICONS_DIR / "bin.png")))
+        del_btn.setIconSize(QSize(14, 14))
+        del_btn.setFixedSize(30, 28)
+        del_btn.setCursor(Qt.PointingHandCursor)
+        del_btn.setToolTip("Delete session")
+        del_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                border: none; border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.FAIL};
+            }}
+        """)
+        del_btn.clicked.connect(
+            lambda *_, _sp=s["path"], _st=s.get("session_type", "Session"):
+                self._on_delete_session(_sp, _st)
+        )
+        rl.addWidget(del_btn)
+
         return row
 
     # ------------------------------------------------------------------ #
@@ -343,6 +365,22 @@ class ReviewManagerDialog(QDialog):
         if not self._require_admin():
             return
         reopen_session(session_path)
+        self._load_sessions()
+
+    def _on_delete_session(self, session_path: str, session_type: str):
+        if not self._require_admin():
+            return
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.warning(
+            self,
+            "Delete Session",
+            f"Permanently delete  \"{session_type}\"?\n\nThis cannot be undone.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        delete_session(session_path)
         self._load_sessions()
 
     # ------------------------------------------------------------------ #
