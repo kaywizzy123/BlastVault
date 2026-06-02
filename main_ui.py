@@ -73,10 +73,6 @@ class MainWindow(QMainWindow):
         menu_menu = mb.addMenu("Menu")
         self.add_catalog_action = menu_menu.addAction("Add Catalog")
         self.remove_catalog_action = menu_menu.addAction("Remove Catalog")
-        # Catalog management is admin-only — hide from non-admins
-        _is_admin = constants.can_admin()
-        self.add_catalog_action.setVisible(_is_admin)
-        self.remove_catalog_action.setVisible(_is_admin)
         menu_menu.addSeparator()
         self.review_sessions_action = menu_menu.addAction("Review Sessions…")
 
