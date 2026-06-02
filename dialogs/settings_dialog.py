@@ -142,48 +142,6 @@ class SettingsDialog(QDialog):
         self.dept_down_btn.setToolTip("Move down")
         self.dept_down_btn.setStyleSheet(self._btn_style())
 
-        # ── Artists tab ──────────────────────────────────────────────────
-        self.artist_section_label = QLabel("Artists")
-        self.artist_section_label.setStyleSheet(self._section_style())
-
-        self.artist_hint_label = QLabel(
-            "These artists appear in the filter bar.\n"
-            "Use the same username token that appears in your filenames.\n"
-            "\"All\" is always available and cannot be removed."
-        )
-        self.artist_hint_label.setStyleSheet(self._hint_style())
-
-        self.artist_list = QListWidget()
-        self.artist_list.setStyleSheet(dialog_list_style())
-        self.artist_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._populate_artist_list()
-
-        self.artist_input = QLineEdit()
-        self.artist_input.setPlaceholderText("Enter artist username (e.g. oogunremi)")
-        self.artist_input.setStyleSheet(input_style())
-
-        self.artist_add_btn = QPushButton()
-        self.artist_add_btn.setIcon(QIcon(str(constants.ICONS_DIR / "plus.png")))
-        self.artist_add_btn.setIconSize(QSize(12, 12))
-        self.artist_add_btn.setStyleSheet(self._btn_style())
-
-        self.artist_remove_btn = QPushButton("Remove Selected")
-        self.artist_remove_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
-
-        self.artist_up_btn = QPushButton()
-        self.artist_up_btn.setIcon(QIcon(str(constants.ICONS_DIR / "caret-arrow-up.png")))
-        self.artist_up_btn.setIconSize(QSize(14, 14))
-        self.artist_up_btn.setFixedWidth(36)
-        self.artist_up_btn.setToolTip("Move up")
-        self.artist_up_btn.setStyleSheet(self._btn_style())
-
-        self.artist_down_btn = QPushButton()
-        self.artist_down_btn.setIcon(QIcon(str(constants.ICONS_DIR / "down.png")))
-        self.artist_down_btn.setIconSize(QSize(14, 14))
-        self.artist_down_btn.setFixedWidth(36)
-        self.artist_down_btn.setToolTip("Move down")
-        self.artist_down_btn.setStyleSheet(self._btn_style())
-
         # ── Reviews tab ──────────────────────────────────────────────────
         self.review_section_label = QLabel("Review Session Types")
         self.review_section_label.setStyleSheet(self._section_style())
@@ -443,34 +401,6 @@ class SettingsDialog(QDialog):
         dept.addWidget(self.dept_remove_btn)
         dept.addStretch()
 
-        # ── Artists tab ──────────────────────────────────────────────────
-        artist_tab = QWidget()
-        art = QVBoxLayout(artist_tab)
-        art.setContentsMargins(15, 15, 15, 15)
-        art.setSpacing(10)
-
-        art.addWidget(self.artist_section_label)
-        art.addWidget(self.artist_hint_label)
-
-        artist_list_row = QHBoxLayout()
-        artist_list_row.addWidget(self.artist_list)
-
-        artist_arrow_col = QVBoxLayout()
-        artist_arrow_col.setSpacing(4)
-        artist_arrow_col.addWidget(self.artist_up_btn)
-        artist_arrow_col.addWidget(self.artist_down_btn)
-        artist_arrow_col.addStretch()
-        artist_list_row.addLayout(artist_arrow_col)
-        art.addLayout(artist_list_row)
-
-        artist_add_row = QHBoxLayout()
-        artist_add_row.addWidget(self.artist_input)
-        artist_add_row.addWidget(self.artist_add_btn)
-        art.addLayout(artist_add_row)
-
-        art.addWidget(self.artist_remove_btn)
-        art.addStretch()
-
         # ── Tools tab ────────────────────────────────────────────────────
         tools_tab = QWidget()
         tools = QVBoxLayout(tools_tab)
@@ -577,7 +507,6 @@ class SettingsDialog(QDialog):
 
         self.tabs.addTab(general_tab,  "General")
         self.tabs.addTab(dept_tab,     "Departments")
-        self.tabs.addTab(artist_tab,   "Artists")
         self.tabs.addTab(reviews_tab,  "Reviews")
         self.tabs.addTab(tools_tab,    "Tools")
         self.tabs.addTab(pipeline_tab, "Pipeline")
@@ -621,13 +550,6 @@ class SettingsDialog(QDialog):
         self.dept_up_btn.clicked.connect(self._on_dept_move_up)
         self.dept_down_btn.clicked.connect(self._on_dept_move_down)
         self.dept_input.returnPressed.connect(self._on_dept_add)
-
-        # Artists
-        self.artist_add_btn.clicked.connect(self._on_artist_add)
-        self.artist_remove_btn.clicked.connect(self._on_artist_remove)
-        self.artist_up_btn.clicked.connect(self._on_artist_move_up)
-        self.artist_down_btn.clicked.connect(self._on_artist_move_down)
-        self.artist_input.returnPressed.connect(self._on_artist_add)
 
         # Reviews
         self.review_add_btn.clicked.connect(self._on_review_type_add)
@@ -709,42 +631,6 @@ class SettingsDialog(QDialog):
         item = self.dept_list.takeItem(row)
         self.dept_list.insertItem(row + 1, item)
         self.dept_list.setCurrentRow(row + 1)
-
-    # ------------------------------------------------------------------ #
-    #  Artists tab slots                                                   #
-    # ------------------------------------------------------------------ #
-
-    def _on_artist_add(self):
-        text = self.artist_input.text().strip().lower()
-        if not text or text == "all":
-            return
-        existing = [
-            self.artist_list.item(i).text()
-            for i in range(self.artist_list.count())
-        ]
-        if text not in existing:
-            self.artist_list.addItem(QListWidgetItem(text))
-        self.artist_input.clear()
-
-    def _on_artist_remove(self):
-        for item in self.artist_list.selectedItems():
-            self.artist_list.takeItem(self.artist_list.row(item))
-
-    def _on_artist_move_up(self):
-        row = self.artist_list.currentRow()
-        if row <= 0:
-            return
-        item = self.artist_list.takeItem(row)
-        self.artist_list.insertItem(row - 1, item)
-        self.artist_list.setCurrentRow(row - 1)
-
-    def _on_artist_move_down(self):
-        row = self.artist_list.currentRow()
-        if row < 0 or row >= self.artist_list.count() - 1:
-            return
-        item = self.artist_list.takeItem(row)
-        self.artist_list.insertItem(row + 1, item)
-        self.artist_list.setCurrentRow(row + 1)
 
     # ------------------------------------------------------------------ #
     #  Reviews tab slots                                                   #
@@ -870,7 +756,6 @@ class SettingsDialog(QDialog):
             # Refresh all list widgets to reflect the imported values
             self._populate_pattern_list()
             self._populate_dept_list()
-            self._populate_artist_list()
             self._populate_review_list()
             self.user_name_lineEdit.setText(constants.CURRENT_USER)
             self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
@@ -922,12 +807,6 @@ class SettingsDialog(QDialog):
             for i in range(self.dept_list.count())
         ]
 
-        # Artists — same pattern
-        constants.ARTISTS = ["All"] + [
-            self.artist_list.item(i).text()
-            for i in range(self.artist_list.count())
-        ]
-
         # Review types (admin only — list may be disabled but values are preserved)
         if not constants.STATUS_LOCKED:
             constants.REVIEW_TYPES = [
@@ -967,13 +846,6 @@ class SettingsDialog(QDialog):
         for dept in constants.DEPARTMENTS:
             if dept != "All":
                 self.dept_list.addItem(QListWidgetItem(dept))
-
-    def _populate_artist_list(self):
-        """Populate artists list in their saved order, excluding 'All'."""
-        self.artist_list.clear()
-        for artist in constants.ARTISTS:
-            if artist != "All":
-                self.artist_list.addItem(QListWidgetItem(artist))
 
     def _section_style(self) -> str:
         return (
