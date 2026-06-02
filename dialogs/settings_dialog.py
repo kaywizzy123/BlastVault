@@ -1,5 +1,4 @@
 import sys
-import hashlib
 import subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -23,7 +22,10 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setFixedSize(520, 620)
+        if constants.can_admin():
+            self.setFixedSize(520, 620)
+        else:
+            self.setFixedSize(400, 140)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.create_widgets()
@@ -41,6 +43,18 @@ class SettingsDialog(QDialog):
         self.user_name_lineEdit.setText(constants.CURRENT_USER)
         self.user_name_lineEdit.setPlaceholderText("e.g.  oogunremi")
         self.user_name_lineEdit.setStyleSheet(self._input_style())
+
+        self.save_btn = QPushButton("Save")
+        self.save_btn.setFixedWidth(100)
+        self.save_btn.setStyleSheet(self._btn_style(hover_color=constants.ACCENT_HI))
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setFixedWidth(100)
+        self.cancel_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+
+        # Non-admin: only needs name + action buttons — skip all admin widgets
+        if not constants.can_admin():
+            return
 
         self.studio_name_label    = QLabel("Studio Name:")
         self.studio_name_lineEdit = QLineEdit()
@@ -211,6 +225,69 @@ class SettingsDialog(QDialog):
         self.review_down_btn.setToolTip("Move down")
         self.review_down_btn.setStyleSheet(self._btn_style())
 
+        # ── Pipeline tab ─────────────────────────────────────────────────
+        self.pipeline_section_label = QLabel("Artist Registry")
+        self.pipeline_section_label.setStyleSheet(self._section_style())
+
+        self.pipeline_hint_label = QLabel(
+            "Points BlastVault at your studio's artist registry for automatic\n"
+            "identity and permission assignment.\n\n"
+            "Source priority:\n"
+            "  1.  BLASTVAULT_REGISTRY  environment variable  (set by IT)\n"
+            "  2.  The path below\n"
+            "  3.  Local  artists.json  in the app data folder  (default)"
+        )
+        self.pipeline_hint_label.setStyleSheet(self._hint_style())
+
+        self.registry_path_label = QLabel("Registry Path / URL:")
+        self.registry_path_label.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; background: transparent; font-size: 11px;"
+        )
+
+        self.registry_path_edit = QLineEdit()
+        self.registry_path_edit.setText(constants.REGISTRY_PATH)
+        self.registry_path_edit.setPlaceholderText(
+            r"e.g.  \\server\pipeline\artists.json  or  http://pipeline/api/artists"
+        )
+        self.registry_path_edit.setStyleSheet(self._input_style())
+
+        self.registry_browse_btn = QPushButton()
+        self.registry_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
+        self.registry_browse_btn.setIconSize(QSize(12, 12))
+        self.registry_browse_btn.setToolTip("Browse for artists.json file")
+        self.registry_browse_btn.setStyleSheet(self._btn_style())
+
+        # Active source indicator — read-only, reflects current resolved source
+        from core.artist_registry import source_label
+        self.registry_source_lbl = QLabel(source_label())
+        self.registry_source_lbl.setStyleSheet(
+            f"background-color: {constants.BORDER}; color: {constants.TEXT_SEC};"
+            f"border: 1px solid {constants.SPLITTER_COLOR}; border-radius: 4px;"
+            f"padding: 6px 8px; font-size: 11px;"
+        )
+        self.registry_source_lbl.setWordWrap(True)
+
+        # Registry status — shows who was found (or not) on last startup
+        perm = constants.REGISTRY_PERMISSION
+        if perm:
+            _name = constants.CURRENT_USER
+            _dept = constants.CURRENT_DEPARTMENT or "—"
+            _icon = "✓" if perm == "admin" else "●"
+            _status_txt = (
+                f"{_icon}  Logged in as  {_name}  ({_dept})  ·  "
+                f"Permission: {perm.capitalize()}"
+            )
+            _status_color = constants.SUCCESS if perm == "admin" else constants.ACCENT_HI
+        else:
+            _status_txt   = "⚠  Current user not found in registry — using local Settings."
+            _status_color = constants.TEXT_SEC
+
+        self.registry_user_lbl = QLabel(_status_txt)
+        self.registry_user_lbl.setStyleSheet(
+            f"color: {_status_color}; background: transparent; font-size: 11px;"
+        )
+        self.registry_user_lbl.setWordWrap(True)
+
         # Disable review tab controls if not admin
         _locked = constants.STATUS_LOCKED
         for w in (self.review_input, self.review_add_btn,
@@ -274,44 +351,35 @@ class SettingsDialog(QDialog):
         self.player_browse_btn.setToolTip("Browse for BlastPlayer main.py")
         self.player_browse_btn.setStyleSheet(self._btn_style())
 
-        # ── Security section ─────────────────────────────────────────────
-        self.security_section_label = QLabel("Security")
-        self.security_section_label.setStyleSheet(self._section_style())
-
-        self.security_hint_label = QLabel(
-            "The admin PIN protects status editing.\n"
-            "Anyone with the PIN can unlock status controls."
-        )
-        self.security_hint_label.setStyleSheet(self._hint_style())
-
-        _has_pin = bool(constants.ADMIN_PIN_HASH)
-        self.change_pin_btn = QPushButton("Change PIN" if _has_pin else "Set PIN")
-        self.change_pin_btn.setStyleSheet(self._btn_style())
-
-        self.remove_pin_btn = QPushButton("Remove PIN")
-        self.remove_pin_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
-        self.remove_pin_btn.setVisible(_has_pin)
-
         # ── Shared action buttons ────────────────────────────────────────
         self.import_btn = QPushButton("Import Config…")
         self.import_btn.setStyleSheet(self._btn_style())
 
         self.export_btn = QPushButton("Export Config…")
         self.export_btn.setStyleSheet(self._btn_style())
-
-        self.save_btn = QPushButton("Save")
-        self.save_btn.setFixedWidth(100)
-        self.save_btn.setStyleSheet(self._btn_style(hover_color=constants.ACCENT_HI))
-
-        self.cancel_btn = QPushButton("Cancel")
-        self.cancel_btn.setFixedWidth(100)
-        self.cancel_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+        # save_btn and cancel_btn created unconditionally at the top of this method
 
     # ------------------------------------------------------------------ #
     #  Layout construction                                                 #
     # ------------------------------------------------------------------ #
 
     def create_layout(self):
+        # ── Non-admin: show only "Your Name" ─────────────────────────────
+        if not constants.can_admin():
+            main = QVBoxLayout(self)
+            main.setContentsMargins(20, 20, 20, 20)
+            main.setSpacing(10)
+            user_row = QHBoxLayout()
+            user_row.addWidget(self.user_name_label)
+            user_row.addWidget(self.user_name_lineEdit)
+            main.addLayout(user_row)
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            btn_row.addWidget(self.cancel_btn)
+            btn_row.addWidget(self.save_btn)
+            main.addLayout(btn_row)
+            return
+
         # ── General tab ─────────────────────────────────────────────────
         general_tab = QWidget()
         gen = QVBoxLayout(general_tab)
@@ -345,21 +413,6 @@ class SettingsDialog(QDialog):
 
         gen.addWidget(self.remove_btn)
 
-        sec_sep = QFrame()
-        sec_sep.setFrameShape(QFrame.HLine)
-        sec_sep.setFixedHeight(1)
-        sec_sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
-        gen.addWidget(sec_sep)
-
-        gen.addWidget(self.security_section_label)
-        gen.addWidget(self.security_hint_label)
-
-        pin_row = QHBoxLayout()
-        pin_row.setSpacing(8)
-        pin_row.addWidget(self.change_pin_btn)
-        pin_row.addWidget(self.remove_pin_btn)
-        pin_row.addStretch()
-        gen.addLayout(pin_row)
         gen.addStretch()
 
         # ── Departments tab ──────────────────────────────────────────────
@@ -484,29 +537,50 @@ class SettingsDialog(QDialog):
         self.tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px;
+                background: {constants.BG};
             }}
             QTabBar::tab {{
-                background: {constants.SPLITTER_COLOR};
+                background: {constants.BORDER};
                 color: {constants.TEXT_SEC};
-                padding: 6px 18px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
+                padding: 8px 20px;
+                border: none;
+                border-bottom: 2px solid transparent;
             }}
             QTabBar::tab:selected {{
-                background: {constants.BORDER};
+                background: {constants.BG};
                 color: {constants.TEXT_PRI};
+                border-bottom: 2px solid {constants.ACCENT_HI};
             }}
             QTabBar::tab:hover:!selected {{
                 background: {constants.ACCENT};
                 color: {constants.TEXT_PRI};
             }}
         """)
+        # ── Pipeline tab ──────────────────────────────────────────────────
+        pipeline_tab = QWidget()
+        pipe = QVBoxLayout(pipeline_tab)
+        pipe.setContentsMargins(15, 15, 15, 15)
+        pipe.setSpacing(10)
+
+        pipe.addWidget(self.pipeline_section_label)
+        pipe.addWidget(self.pipeline_hint_label)
+
+        pipe.addWidget(self.registry_path_label)
+        reg_row = QHBoxLayout()
+        reg_row.addWidget(self.registry_path_edit)
+        reg_row.addWidget(self.registry_browse_btn)
+        pipe.addLayout(reg_row)
+
+        pipe.addWidget(self.registry_source_lbl)
+        pipe.addWidget(self.registry_user_lbl)
+        pipe.addStretch()
+
         self.tabs.addTab(general_tab,  "General")
         self.tabs.addTab(dept_tab,     "Departments")
         self.tabs.addTab(artist_tab,   "Artists")
         self.tabs.addTab(reviews_tab,  "Reviews")
         self.tabs.addTab(tools_tab,    "Tools")
+        self.tabs.addTab(pipeline_tab, "Pipeline")
 
         # ── Main dialog layout ───────────────────────────────────────────
         main = QVBoxLayout(self)
@@ -527,6 +601,14 @@ class SettingsDialog(QDialog):
     # ------------------------------------------------------------------ #
 
     def create_connections(self):
+        # Dialog buttons — always needed regardless of permission level
+        self.save_btn.clicked.connect(self._on_save)
+        self.cancel_btn.clicked.connect(self.reject)
+
+        # Non-admin: only name + close matter
+        if not constants.can_admin():
+            return
+
         # General
         self.studio_root_browse_btn.clicked.connect(self._on_browse_root)
         self.add_btn.clicked.connect(self._on_pattern_add)
@@ -558,15 +640,12 @@ class SettingsDialog(QDialog):
         self.ffmpeg_test_btn.clicked.connect(self._on_test_ffmpeg)
         self.player_browse_btn.clicked.connect(self._on_browse_player)
 
-        # Security
-        self.change_pin_btn.clicked.connect(self._on_change_pin)
-        self.remove_pin_btn.clicked.connect(self._on_remove_pin)
+        # Pipeline
+        self.registry_browse_btn.clicked.connect(self._on_browse_registry)
 
-        # Dialog buttons
+        # Import / Export
         self.import_btn.clicked.connect(self._on_import_config)
         self.export_btn.clicked.connect(self._on_export_config)
-        self.save_btn.clicked.connect(self._on_save)
-        self.cancel_btn.clicked.connect(self.reject)
 
     # ------------------------------------------------------------------ #
     #  General tab slots                                                   #
@@ -747,6 +826,15 @@ class SettingsDialog(QDialog):
         if path:
             self.player_path_edit.setText(path)
 
+    def _on_browse_registry(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Artist Registry",
+            str(Path.home()),
+            "JSON files (*.json);;All files (*)",
+        )
+        if path:
+            self.registry_path_edit.setText(path)
+
     # ------------------------------------------------------------------ #
     #  Import / Export slots                                               #
     # ------------------------------------------------------------------ #
@@ -788,6 +876,7 @@ class SettingsDialog(QDialog):
             self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
             self.studio_root_lineEdit.setText(constants.ROOT_DIR)
             self.player_path_edit.setText(str(constants.BLAST_PLAYER_PATH))
+            self.registry_path_edit.setText(constants.REGISTRY_PATH)
             self.ffmpeg_status_lbl.setText("")
             self.settings_changed.emit()
         else:
@@ -803,14 +892,23 @@ class SettingsDialog(QDialog):
     # ------------------------------------------------------------------ #
 
     def _on_save(self):
-        # General
+        # "Your Name" is editable by everyone
+        user = self.user_name_lineEdit.text().strip()
+        if user:
+            constants.CURRENT_USER = user
+
+        # Non-admin: only name matters — save and return
+        if not constants.can_admin():
+            save_config()
+            self.settings_changed.emit()
+            self.accept()
+            return
+
+        # Admin: save all settings
         constants.EXCLUDED_PATTERNS = [
             self.pattern_list.item(i).text()
             for i in range(self.pattern_list.count())
         ]
-        user = self.user_name_lineEdit.text().strip()
-        if user:
-            constants.CURRENT_USER = user
         constants.STUDIO_NAME = (
             self.studio_name_lineEdit.text().strip() or constants.STUDIO_NAME
         )
@@ -842,71 +940,12 @@ class SettingsDialog(QDialog):
         if player:
             constants.BLAST_PLAYER_PATH = Path(player)
 
+        # Pipeline
+        constants.REGISTRY_PATH = self.registry_path_edit.text().strip()
+
         save_config()
         self.settings_changed.emit()
         self.accept()
-
-    # ------------------------------------------------------------------ #
-    #  PIN management                                                      #
-    # ------------------------------------------------------------------ #
-
-    def _on_change_pin(self):
-        from dialogs.pin_dialog import PinInputDialog, PinSetupDialog
-
-        if constants.ADMIN_PIN_HASH:
-            # Verify current PIN first
-            def _verify(pin: str) -> bool:
-                return hashlib.sha256(pin.encode()).hexdigest() == constants.ADMIN_PIN_HASH
-
-            dlg = PinInputDialog(
-                title="Verify Current PIN",
-                subtitle="Enter your current PIN before setting a new one.",
-                verify_fn=_verify,
-                parent=self,
-            )
-            _, ok = dlg.get_pin()
-            if not ok:
-                return
-
-        setup = PinSetupDialog(self)
-        new_pin, ok = setup.get_pin()
-        if not ok or not new_pin:
-            return
-
-        constants.ADMIN_PIN_HASH = hashlib.sha256(new_pin.encode()).hexdigest()
-        save_config()
-        self._update_pin_buttons()
-        self.change_pin_btn.setText("PIN Updated ✓")
-        QTimer.singleShot(2000, lambda: self.change_pin_btn.setText("Change PIN"))
-
-    def _on_remove_pin(self):
-        from dialogs.pin_dialog import PinInputDialog
-
-        if not constants.ADMIN_PIN_HASH:
-            return
-
-        def _verify(pin: str) -> bool:
-            return hashlib.sha256(pin.encode()).hexdigest() == constants.ADMIN_PIN_HASH
-
-        dlg = PinInputDialog(
-            title="Remove PIN",
-            subtitle="Enter your PIN to confirm.\nThis will disable the admin lock.",
-            verify_fn=_verify,
-            parent=self,
-        )
-        _, ok = dlg.get_pin()
-        if not ok:
-            return
-
-        constants.ADMIN_PIN_HASH = ""
-        constants.STATUS_LOCKED = True
-        save_config()
-        self._update_pin_buttons()
-
-    def _update_pin_buttons(self):
-        has_pin = bool(constants.ADMIN_PIN_HASH)
-        self.change_pin_btn.setText("Change PIN" if has_pin else "Set PIN")
-        self.remove_pin_btn.setVisible(has_pin)
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                             #

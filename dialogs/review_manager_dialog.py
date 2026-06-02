@@ -110,19 +110,20 @@ class ReviewManagerDialog(QDialog):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(8)
 
-        self._new_btn = QPushButton("+ New Session")
-        self._new_btn.setFixedHeight(32)
-        self._new_btn.setCursor(Qt.PointingHandCursor)
-        self._new_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT_HI};
-                color: white; border: none; border-radius: 4px;
-                padding: 4px 14px; font-weight: bold;
-            }}
-            QPushButton:hover {{ background-color: #1a95e8; }}
-        """)
-        self._new_btn.clicked.connect(self._on_new_session)
-        toolbar.addWidget(self._new_btn)
+        if constants.can_admin():
+            self._new_btn = QPushButton("+ New Session")
+            self._new_btn.setFixedHeight(32)
+            self._new_btn.setCursor(Qt.PointingHandCursor)
+            self._new_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {constants.ACCENT_HI};
+                    color: white; border: none; border-radius: 4px;
+                    padding: 4px 14px; font-weight: bold;
+                }}
+                QPushButton:hover {{ background-color: #1a95e8; }}
+            """)
+            self._new_btn.clicked.connect(self._on_new_session)
+            toolbar.addWidget(self._new_btn)
 
         toolbar.addStretch()
 
@@ -264,70 +265,73 @@ class ReviewManagerDialog(QDialog):
         rl.addWidget(open_btn)
 
         # Action button: "Complete" for open sessions, "Reopen" for completed ones
-        if is_open:
-            done_btn = QPushButton("Complete")
-            done_btn.setIcon(QIcon(str(constants.ICONS_DIR / "check.png")))
-            done_btn.setIconSize(QSize(14, 14))
-            done_btn.setFixedHeight(28)
-            done_btn.setCursor(Qt.PointingHandCursor)
-            done_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {constants.ACCENT};
-                    color: {constants.TEXT_SEC};
-                    border: 1px solid {constants.SPLITTER_COLOR};
-                    border-radius: 4px; padding: 2px 10px; font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {constants.SUCCESS};
-                    color: white; border-color: {constants.SUCCESS};
-                }}
-            """)
-            done_btn.clicked.connect(
-                lambda *_, _sp=s["path"]: self._on_mark_complete(_sp)
-            )
-            rl.addWidget(done_btn)
-        else:
-            reopen_btn = QPushButton("Reopen")
-            reopen_btn.setFixedHeight(28)
-            reopen_btn.setCursor(Qt.PointingHandCursor)
-            reopen_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {constants.ACCENT};
-                    color: {constants.TEXT_SEC};
-                    border: 1px solid {constants.SPLITTER_COLOR};
-                    border-radius: 4px; padding: 2px 10px; font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {constants.ACCENT_HI};
-                    color: white; border-color: {constants.ACCENT_HI};
-                }}
-            """)
-            reopen_btn.clicked.connect(
-                lambda *_, _sp=s["path"]: self._on_reopen_session(_sp)
-            )
-            rl.addWidget(reopen_btn)
+        # Admin-only — hidden for non-admins
+        if constants.can_admin():
+            if is_open:
+                done_btn = QPushButton("Complete")
+                done_btn.setIcon(QIcon(str(constants.ICONS_DIR / "check.png")))
+                done_btn.setIconSize(QSize(14, 14))
+                done_btn.setFixedHeight(28)
+                done_btn.setCursor(Qt.PointingHandCursor)
+                done_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {constants.ACCENT};
+                        color: {constants.TEXT_SEC};
+                        border: 1px solid {constants.SPLITTER_COLOR};
+                        border-radius: 4px; padding: 2px 10px; font-size: 12px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {constants.SUCCESS};
+                        color: white; border-color: {constants.SUCCESS};
+                    }}
+                """)
+                done_btn.clicked.connect(
+                    lambda *_, _sp=s["path"]: self._on_mark_complete(_sp)
+                )
+                rl.addWidget(done_btn)
+            else:
+                reopen_btn = QPushButton("Reopen")
+                reopen_btn.setFixedHeight(28)
+                reopen_btn.setCursor(Qt.PointingHandCursor)
+                reopen_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {constants.ACCENT};
+                        color: {constants.TEXT_SEC};
+                        border: 1px solid {constants.SPLITTER_COLOR};
+                        border-radius: 4px; padding: 2px 10px; font-size: 12px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {constants.ACCENT_HI};
+                        color: white; border-color: {constants.ACCENT_HI};
+                    }}
+                """)
+                reopen_btn.clicked.connect(
+                    lambda *_, _sp=s["path"]: self._on_reopen_session(_sp)
+                )
+                rl.addWidget(reopen_btn)
 
-        # Delete button — always shown, admin + confirmation required on click
-        del_btn = QPushButton()
-        del_btn.setIcon(QIcon(str(constants.ICONS_DIR / "bin.png")))
-        del_btn.setIconSize(QSize(14, 14))
-        del_btn.setFixedSize(30, 28)
-        del_btn.setCursor(Qt.PointingHandCursor)
-        del_btn.setToolTip("Delete session")
-        del_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                border: none; border-radius: 4px;
-            }}
-            QPushButton:hover {{
-                background-color: {constants.FAIL};
-            }}
-        """)
-        del_btn.clicked.connect(
-            lambda *_, _sp=s["path"], _st=s.get("session_type", "Session"):
-                self._on_delete_session(_sp, _st)
-        )
-        rl.addWidget(del_btn)
+        # Delete button — admin-only
+        if constants.can_admin():
+            del_btn = QPushButton()
+            del_btn.setIcon(QIcon(str(constants.ICONS_DIR / "bin.png")))
+            del_btn.setIconSize(QSize(14, 14))
+            del_btn.setFixedSize(30, 28)
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.setToolTip("Delete session")
+            del_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {constants.ACCENT};
+                    border: none; border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    background-color: {constants.FAIL};
+                }}
+            """)
+            del_btn.clicked.connect(
+                lambda *_, _sp=s["path"], _st=s.get("session_type", "Session"):
+                    self._on_delete_session(_sp, _st)
+            )
+            rl.addWidget(del_btn)
 
         return row
 

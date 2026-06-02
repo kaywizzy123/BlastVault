@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/SHOWS/**)",
+      "Bash(python main_ui.py)",
+      "Bash(python \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastVault/main_ui.py\")",
+      "Bash(mkdir -p \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/core\")",
+      "Bash(mkdir -p \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/widgets\")",
+      "Bash(mkdir -p \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/dialogs\")",
+      "Bash(mkdir -p \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/tabs\")",
+      "Bash(mkdir -p \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/icons\")",
+      "Bash(cp \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastVault/icons/\"* \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/icons/\" 2>/dev/null *)",
+      "Bash(python main.py)",
+      "Bash(python \"c:/Users/kayod/OneDrive/Documents/Python Projects/BlastAdmin/main.py\")"
+    ],
+    "additionalDirectories": [
+      "C:\\SHOWS",
+      "c:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastVault\\icons",
+      "c:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastAdmin\\core",
+      "c:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastAdmin\\widgets",
+      "c:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastAdmin\\dialogs",
+      "c:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastAdmin\\tabs",
+      "c:\\Users\\kayod\\OneDrive\\Documents\\Python Projects\\BlastAdmin"
+    ]
+  }
+}

@@ -312,8 +312,8 @@ class NotesDialog(QDialog):
         sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
         main.addWidget(sep)
 
-        # ── Input area (admin only) / locked message ─────────────────────
-        if not constants.STATUS_LOCKED:
+        # ── Input area (reviewer + admin) / locked message ───────────────
+        if constants.can_review():
             self._note_input = QTextEdit()
             self._note_input.setPlaceholderText("Write a note…")
             self._note_input.setFixedHeight(80)
@@ -357,7 +357,7 @@ class NotesDialog(QDialog):
             main.addLayout(btn_row)
 
         else:
-            locked_lbl = QLabel("Unlock to add notes.")
+            locked_lbl = QLabel("Unlock admin mode to add notes.")
             locked_lbl.setAlignment(Qt.AlignCenter)
             locked_lbl.setStyleSheet(
                 f"color: {constants.TEXT_SEC}; background: transparent; font-size: 11px;"
@@ -385,8 +385,8 @@ class NotesDialog(QDialog):
             )
             self._cards_layout.addWidget(empty)
         else:
-            # Pass delete callback to each card only when admin is unlocked
-            on_del = self._on_delete_note if not constants.STATUS_LOCKED else None
+            # Delete is admin-only; adding notes is reviewer+ (handled in _build_ui)
+            on_del = self._on_delete_note if constants.can_admin() else None
             for note in reversed(notes):   # newest first
                 self._cards_layout.addWidget(_NoteCard(note, on_delete=on_del))
 

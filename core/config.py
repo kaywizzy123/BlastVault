@@ -15,15 +15,17 @@ def load_config():
             constants.STUDIO_NAME       = data.get("studio_name",  constants.STUDIO_NAME)
             constants.CURRENT_USER      = data.get("current_user", constants.CURRENT_USER)
             constants.ROOT_DIR          = data.get("root_dir",     constants.ROOT_DIR)
-            _REMOVED_DEPTS = {"Visual Development", "Modeling", "Rigging"}
-            constants.DEPARTMENTS = [
-                d for d in data.get("departments", constants.DEPARTMENTS)
-                if d not in _REMOVED_DEPTS
+            constants.DEPARTMENTS = data.get("departments", constants.DEPARTMENTS)
+            # Strip any purely-numeric tokens that crept in from filename scanning
+            constants.ARTISTS = [
+                a for a in data.get("artists", constants.ARTISTS)
+                if not str(a).isdigit()
             ]
-            constants.ARTISTS           = data.get("artists",      constants.ARTISTS)
 
             # "admin_pin_hash" is the current key; fall back to the old
             # "supervisor_pin_hash" key so existing configs migrate silently.
+            constants.REGISTRY_PATH = data.get("registry_path", "")
+
             constants.ADMIN_PIN_HASH = (
                 data.get("admin_pin_hash")
                 or data.get("supervisor_pin_hash", "")
@@ -46,7 +48,9 @@ def load_config():
             if "splitter_sizes" in data:
                 constants.SPLITTER_SIZES = data["splitter_sizes"]
 
-            return data.get("catalogs", [])
+            catalogs = data.get("catalogs", [])
+            constants.CATALOG_ROOTS = catalogs
+            return catalogs
         except Exception:
             constants.EXCLUDED_PATTERNS = []
     return []
@@ -66,6 +70,7 @@ def save_config(catalog_paths=None):
         existing["departments"]       = constants.DEPARTMENTS
         existing["artists"]           = constants.ARTISTS
         existing["blast_player_path"]   = str(constants.BLAST_PLAYER_PATH)
+        existing["registry_path"]  = constants.REGISTRY_PATH
         existing["admin_pin_hash"] = constants.ADMIN_PIN_HASH
         existing.pop("supervisor_pin_hash", None)   # remove legacy key
         existing["review_types"]  = constants.REVIEW_TYPES

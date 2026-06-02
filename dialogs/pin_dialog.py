@@ -1,6 +1,7 @@
 """
 pin_dialog.py — Styled admin PIN dialogs.
 
+NoPinDialog     — info-only: tells the user no PIN is set, contact admin.
 PinInputDialog  — single-field, enter & optionally verify a PIN.
 PinSetupDialog  — two-field, create a new PIN (both fields must match).
 """
@@ -12,6 +13,89 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 
 from core import constants
+
+
+# ──────────────────────────────────────────────────────────────────────────── #
+#  Info-only: no PIN set                                                        #
+# ──────────────────────────────────────────────────────────────────────────── #
+
+class NoPinDialog(QDialog):
+    """Styled info dialog shown to registry artists when no admin PIN exists."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("No Admin PIN")
+        self.setFixedWidth(360)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
+        self.setStyleSheet(f"background-color: {constants.BORDER};")
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(28, 24, 28, 24)
+        outer.setSpacing(0)
+
+        # ── Icon ─────────────────────────────────────────────────────────
+        icon_lbl = QLabel()
+        pix = QPixmap(str(constants.ICONS_DIR / "lock.png"))
+        if not pix.isNull():
+            icon_lbl.setPixmap(
+                pix.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        icon_lbl.setAlignment(Qt.AlignCenter)
+        icon_lbl.setStyleSheet("background: transparent;")
+        outer.addWidget(icon_lbl)
+        outer.addSpacing(10)
+
+        # ── Title ─────────────────────────────────────────────────────────
+        title_lbl = QLabel("No Admin PIN Set")
+        title_lbl.setAlignment(Qt.AlignCenter)
+        title_lbl.setStyleSheet(f"""
+            font-size: 16px;
+            font-weight: bold;
+            color: {constants.TEXT_PRI};
+            background: transparent;
+        """)
+        outer.addWidget(title_lbl)
+        outer.addSpacing(8)
+
+        # ── Message ───────────────────────────────────────────────────────
+        msg_lbl = QLabel("An admin PIN hasn't been configured yet.\nAsk your admin to set one in Settings.")
+        msg_lbl.setAlignment(Qt.AlignCenter)
+        msg_lbl.setWordWrap(True)
+        msg_lbl.setStyleSheet(f"""
+            font-size: 12px;
+            color: {constants.TEXT_SEC};
+            background: transparent;
+            padding: 0px 4px;
+        """)
+        outer.addWidget(msg_lbl)
+        outer.addSpacing(22)
+
+        # ── OK button ─────────────────────────────────────────────────────
+        ok_btn = QPushButton("OK")
+        ok_btn.setFixedHeight(32)
+        ok_btn.setMinimumWidth(90)
+        ok_btn.setCursor(Qt.PointingHandCursor)
+        ok_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 20px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #1a95e8;
+            }}
+        """)
+        ok_btn.clicked.connect(self.accept)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.addStretch()
+        outer.addLayout(btn_row)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #

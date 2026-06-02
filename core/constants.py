@@ -7,9 +7,53 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 
 STUDIO_NAME  = "INDIE ANIMATION STUDIOS"
-# Artist's display name — defaults to the OS login so it works out-of-the-box.
-# Overridable via Settings → General and persisted to config.json.
-CURRENT_USER: str = _getpass.getuser()
+
+# ── Current user identity ────────────────────────────────────────────────── #
+# Populated at startup by core.artist_registry.apply_registry() when a
+# registry is configured.  Falls back to the OS login name so it always
+# has a sensible value before the registry is consulted.
+CURRENT_USER:       str = _getpass.getuser()
+CURRENT_DEPARTMENT: str = ""          # filled from registry or left blank
+
+# ── Artist registry ──────────────────────────────────────────────────────── #
+# Path or URL pointing to the studio artist registry JSON.
+# Resolution order (first match wins):
+#   1. BLASTVAULT_REGISTRY environment variable
+#   2. REGISTRY_PATH (saved to config.json via Settings → Pipeline)
+#   3. LOCAL_REGISTRY_PATH (automatic fallback — always available)
+REGISTRY_PATH:       str       = ""   # empty = use local default
+REGISTRY_PERMISSION: str       = ""   # "admin"|"reviewer"|"basic"|"" (not found)
+CATALOG_ROOTS:       list[str] = []   # populated by load_config(); used by registry lookup
+
+
+# ── Permission helpers ───────────────────────────────────────────────────── #
+
+def can_admin() -> bool:
+    """Return True for full admin access.
+
+    Rules:
+      - Locked out entirely → False
+      - Registry marks user as reviewer or basic → False even if PIN-unlocked.
+        PIN unlock for these tiers only grants status-editing access, not admin
+        privileges. The registry is the authority on who is actually admin.
+      - Registry marks user as admin (always unlocked) → True
+      - No registry in use (REGISTRY_PERMISSION == "") → PIN unlock grants full
+        access, preserving the original PIN-based workflow.
+    """
+    if STATUS_LOCKED:
+        return False
+    if REGISTRY_PERMISSION in ("reviewer", "basic"):
+        return False
+    return True
+
+
+def can_review() -> bool:
+    """Return True for review-level access (approve / reject shots, add notes).
+
+    True for admins *and* registry reviewers.  Basic users who have not
+    unlocked via PIN are excluded.
+    """
+    return not STATUS_LOCKED or REGISTRY_PERMISSION == "reviewer"
 ICONS_DIR = _ROOT / "icons"
 ICON = str(ICONS_DIR / "bv.png")
 
@@ -36,8 +80,9 @@ else:
     _APP_DATA  = _ROOT
     _CACHE_DIR = _ROOT / "thumbnail_cache"
 
-CONFIG_PATH     = _APP_DATA  / "config.json"
-THUMB_CACHE_DIR = _CACHE_DIR
+CONFIG_PATH          = _APP_DATA / "config.json"
+LOCAL_REGISTRY_PATH  = _APP_DATA / "artists.json"   # default registry location
+THUMB_CACHE_DIR      = _CACHE_DIR
 
 # Ensure both directories exist at import time so nothing else needs to mkdir.
 _APP_DATA.mkdir(parents=True, exist_ok=True)
@@ -139,7 +184,7 @@ OBJ_3D_EXTS = {".fbx", ".usd", ".usda", ".usdc", ".usdz"}
 # Only video, image, and audio files are surfaced in the browser.
 # DOC_EXTS / OBJ_3D_EXTS are kept as named sets so icons.py can still
 # generate placeholder icons if it ever encounters those file types.
-ALLOWED_EXTS = IMAGE_EXTS | VIDEO_EXTS | AUDIO_EXTS
+ALLOWED_EXTS = VIDEO_EXTS
 
 EXCLUDED_PATTERNS = []
 
@@ -147,10 +192,19 @@ ARTISTS: list[str] = ["All"]   # populated from config; "All" always first
 
 DEPARTMENTS = [
     "All",
+    # Pre-production
     "Story",
+    "Visual Development",
+    # 3D Asset
+    "Modeling",
+    "Rigging",
+    "Texturing",
+    "Look Development",
+    # Production
     "Layout",
     "Layout Finaling",
     "Animation",
+    "Technical Animation",
     "Character FX",
     "FX / Simulation",
     "Lighting",
@@ -161,36 +215,66 @@ DEPARTMENTS = [
 # Maps lowercase filename tokens → department label.
 # Tokens are produced by splitting the stem on  _  -  .  and whitespace.
 DEPARTMENT_KEYWORDS: dict[str, str] = {
+    # Story
     "story":      "Story",
     "board":      "Story",
     "storyboard": "Story",
+    # Visual Development
     "concept":    "Visual Development",
     "cncpt":      "Visual Development",
     "visdev":     "Visual Development",
+    # Modeling
     "model":      "Modeling",
     "mdl":        "Modeling",
     "geo":        "Modeling",
+    "mesh":       "Modeling",
+    # Rigging
     "rig":        "Rigging",
     "rigging":    "Rigging",
+    # Texturing
+    "tex":        "Texturing",
+    "texture":    "Texturing",
+    "texturing":  "Texturing",
+    "paint":      "Texturing",
+    # Look Development
+    "lookdev":    "Look Development",
+    "ldev":       "Look Development",
+    "look":       "Look Development",
+    "surface":    "Look Development",
+    "surfacing":  "Look Development",
+    "shade":      "Look Development",
+    "shading":    "Look Development",
+    # Layout
     "layout":     "Layout",
     "rlo":        "Layout",
-    "flo":        "Layout Finaling",
     "lyt":        "Layout",
+    # Layout Finaling
+    "flo":        "Layout Finaling",
+    # Animation
     "anim":       "Animation",
     "anm":        "Animation",
     "animation":  "Animation",
+    # Technical Animation
+    "tanim":      "Technical Animation",
+    "techanim":   "Technical Animation",
+    "technim":    "Technical Animation",
+    # Character FX
     "cfx":        "Character FX",
     "charfx":     "Character FX",
     "charfin":    "Character FX",
+    # FX / Simulation
     "fx":         "FX / Simulation",
     "sim":        "FX / Simulation",
     "vfx":        "FX / Simulation",
+    # Lighting
     "light":      "Lighting",
     "lgt":        "Lighting",
     "lighting":   "Lighting",
+    # Compositing
     "comp":        "Compositing",
     "composite":   "Compositing",
     "compositing": "Compositing",
+    # Matte Painting
     "matte":       "Matte Painting",
     "mattepaint":  "Matte Painting",
 }
@@ -224,8 +308,10 @@ def detect_artist(filename: str) -> str:
     if not tokens:
         return ""
     last = tokens[-1]
-    # Guard: don't return a department keyword as an artist name
+    # Guard: don't return a department keyword or a bare number as an artist name
     if last in DEPARTMENT_KEYWORDS:
+        return ""
+    if last.isdigit():
         return ""
     return last
 

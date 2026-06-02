@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QSplitter, QAction,
     QDialog,
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QFileSystemWatcher
 from PyQt5.QtGui import QIcon
 
 from core import constants
@@ -27,8 +27,14 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(constants.ICON))
 
         self._splash_update(10, "Loading configuration…")
-        is_first_run = not constants.CONFIG_PATH.exists()
+        self._is_first_run = not constants.CONFIG_PATH.exists()
         saved_catalogs = load_config()
+
+        # Apply artist registry — sets CURRENT_USER, CURRENT_DEPARTMENT,
+        # STATUS_LOCKED, and REGISTRY_PERMISSION before any widgets are built.
+        from core.artist_registry import apply_registry
+        apply_registry()
+
         if splash:
             splash.set_studio_name(constants.STUDIO_NAME)
 
@@ -47,11 +53,12 @@ class MainWindow(QMainWindow):
         self._splash_update(100, "Ready!")
         # Prune stale thumbnail cache entries 5 s after startup (background)
         QTimer.singleShot(5000, self._prune_thumb_cache)
-        if is_first_run:
-            dlg = FirstRunDialog(self)
-            dlg.exec_()
-            # Reflect any name the user just entered in the header immediately
-            self.header_widget.update_studio_label(constants.STUDIO_NAME)
+        # Watch artists.json for live changes (e.g. BlastAdmin edits)
+        self._setup_registry_watcher()
+        self._registry_refresh_timer = QTimer(self)
+        self._registry_refresh_timer.setSingleShot(True)
+        self._registry_refresh_timer.setInterval(500)   # 500 ms debounce
+        self._registry_refresh_timer.timeout.connect(self._apply_registry_update)
 
     def _splash_update(self, value: int, message: str) -> None:
         """Forward progress update to the splash screen if one is active."""
@@ -66,6 +73,10 @@ class MainWindow(QMainWindow):
         menu_menu = mb.addMenu("Menu")
         self.add_catalog_action = menu_menu.addAction("Add Catalog")
         self.remove_catalog_action = menu_menu.addAction("Remove Catalog")
+        # Catalog management is admin-only — hide from non-admins
+        _is_admin = constants.can_admin()
+        self.add_catalog_action.setVisible(_is_admin)
+        self.remove_catalog_action.setVisible(_is_admin)
         menu_menu.addSeparator()
         self.review_sessions_action = menu_menu.addAction("Review Sessions…")
 
@@ -131,9 +142,10 @@ class MainWindow(QMainWindow):
         self.center_panel.seq_item_selected.connect(self.right_panel.set_seq_mode)
         self.right_panel.status_changed.connect(self.center_panel.update_item_status)
         self.header_widget.lock_toggled.connect(self._on_lock_toggled)
-        # Apply initial locked state to both panels
-        self.center_panel.set_status_locked(True)
-        self.right_panel.set_status_locked(True)
+        # Apply initial locked state — respects registry permissions set at startup
+        _init_locked = constants.STATUS_LOCKED
+        self.center_panel.set_status_locked(_init_locked)
+        self.right_panel.set_status_locked(_init_locked)
         self.center_panel.filters_cleared.connect(self.on_filters_cleared)
         self.header_widget.status_changed.connect(self.center_panel.filter_status)
         # Review submission from center panel context menu
@@ -272,6 +284,11 @@ class MainWindow(QMainWindow):
         *locked = True*  → user wants to re-lock (no PIN needed).
         *locked = False* → user wants to unlock (PIN required).
         """
+        # Registry admin — permanently unlocked, button is disabled in the UI
+        # but guard here as a safety net.
+        if constants.REGISTRY_PERMISSION == "admin":
+            return
+
         if locked:
             constants.STATUS_LOCKED = True
             self.header_widget.set_locked(True)
@@ -282,10 +299,16 @@ class MainWindow(QMainWindow):
 
     def _try_unlock(self):
         """Show PIN dialog; unlock only if the correct PIN is entered."""
-        from dialogs.pin_dialog import PinInputDialog, PinSetupDialog
+        from dialogs.pin_dialog import PinInputDialog, PinSetupDialog, NoPinDialog
 
         if not constants.ADMIN_PIN_HASH:
-            # ── First time: no PIN set yet ──────────────────────────────
+            # ── No PIN set yet ──────────────────────────────────────────
+            if constants.REGISTRY_PERMISSION in ("reviewer", "basic"):
+                # Artists can't create a PIN — only admins can
+                NoPinDialog(self).exec_()
+                self.header_widget.set_locked(True)
+                return
+            # No registry / admin context — offer first-time PIN setup
             dlg = PinSetupDialog(self)
             pin, ok = dlg.get_pin()
             if not ok or not pin:
@@ -317,7 +340,63 @@ class MainWindow(QMainWindow):
         from utils.icons import prune_thumbnail_cache
         threading.Thread(target=prune_thumbnail_cache, daemon=True).start()
 
+    # ------------------------------------------------------------------ #
+    #  Live registry watcher                                               #
+    # ------------------------------------------------------------------ #
+
+    def _setup_registry_watcher(self):
+        """Watch artists.json for external changes (e.g. BlastAdmin edits)."""
+        from core.artist_registry import resolve_source
+        from pathlib import Path
+        self._registry_watcher = QFileSystemWatcher(self)
+        self._registry_watcher.fileChanged.connect(self._on_registry_file_changed)
+        source = resolve_source()
+        if source and Path(source).exists():
+            self._registry_watcher.addPath(source)
+
+    def _on_registry_file_changed(self, path: str):
+        """Called immediately when artists.json is written.
+
+        Re-adds the file (Windows may drop the watch after a write) and
+        starts the debounce timer so rapid saves don't trigger multiple
+        refreshes.
+        """
+        from pathlib import Path
+        # Re-watch — some editors/savers replace the file rather than modify it
+        if Path(path).exists():
+            self._registry_watcher.addPath(path)
+        # Debounce: restart the timer so we only refresh once per save burst
+        self._registry_refresh_timer.start()
+
+    def _apply_registry_update(self):
+        """Debounced slot — runs after artists.json settles.
+
+        Re-applies the registry and refreshes all affected UI components
+        without requiring a relaunch.
+        """
+        from core.artist_registry import apply_registry
+        apply_registry()
+        _locked = constants.STATUS_LOCKED
+        self.header_widget.update_studio_label(constants.STUDIO_NAME)
+        self.header_widget.refresh_lock_state()
+        self.header_widget.reload_departments()
+        self.header_widget.reload_artists()
+        self.center_panel.set_status_locked(_locked)
+        self.right_panel.set_status_locked(_locked)
+
     def on_settings_changed(self):
+        # Re-run registry so a name change in Settings takes effect immediately —
+        # e.g. user types "oogunremi" → registry finds the match → admin granted
+        # without needing a restart.
+        from core.artist_registry import apply_registry
+        apply_registry()
+
+        # Sync lock state across all panels to reflect the new registry result
+        _locked = constants.STATUS_LOCKED
+        self.header_widget.refresh_lock_state()
+        self.center_panel.set_status_locked(_locked)
+        self.right_panel.set_status_locked(_locked)
+
         self.header_widget.update_studio_label(constants.STUDIO_NAME)
         self.header_widget.reload_departments()
         self.header_widget.reload_artists()
@@ -348,6 +427,20 @@ if __name__ == "__main__":
 
     def _finish():
         splash.close()
+        # First-run dialog shown before main window — clean onboarding experience
+        if window._is_first_run:
+            dlg = FirstRunDialog(None)
+            dlg.exec_()
+            # Re-apply registry with the username the user just entered so
+            # permissions (admin/reviewer/basic) take effect immediately.
+            from core.artist_registry import apply_registry
+            apply_registry()
+            window.header_widget.update_studio_label(constants.STUDIO_NAME)
+            window.header_widget.refresh_lock_state()
+            window.center_panel.set_status_locked(constants.STATUS_LOCKED)
+            window.right_panel.set_status_locked(constants.STATUS_LOCKED)
+            window.header_widget.reload_departments()
+            window.header_widget.reload_artists()
         if constants.SPLITTER_SIZES:
             window.splitter.setSizes(constants.SPLITTER_SIZES)
         if not constants.WINDOW_MAXIMIZED and constants.WINDOW_GEOMETRY:

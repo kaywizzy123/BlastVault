@@ -211,7 +211,7 @@ class ReviewSessionDialog(QDialog):
         # ── Rebuild footer ────────────────────────────────────────────────
         _clear_layout(self._footer_layout)
 
-        if is_open:
+        if is_open and constants.can_admin():
             complete_btn = QPushButton("Mark Session Complete")
             complete_btn.setIcon(QIcon(str(constants.ICONS_DIR / "check.png")))
             complete_btn.setIconSize(QSize(14, 14))
@@ -436,8 +436,8 @@ class ReviewSessionDialog(QDialog):
             pass
 
     def _on_review(self, item_id: str, review_status: str, existing_note: str = ""):
-        """Write review status for *item_id* — requires admin."""
-        if not self._require_admin():
+        """Write review status for *item_id* — requires reviewer or admin access."""
+        if not self._require_can_review():
             return
 
         note = self._ask_reviewer_note(review_status, existing_note)
@@ -572,8 +572,21 @@ class ReviewSessionDialog(QDialog):
         self._load_session()
 
     # ------------------------------------------------------------------ #
-    #  Admin gate                                                          #
+    #  Permission gates                                                    #
     # ------------------------------------------------------------------ #
+
+    def _require_can_review(self) -> bool:
+        """Return True if the user has at least reviewer-level access.
+
+        Registry reviewers and admins pass immediately.
+        Basic users without registry access fall through to the PIN gate
+        so the existing PIN-based workflow still works when no registry
+        is configured.
+        """
+        if constants.can_review():
+            return True
+        # Not granted by registry — fall back to PIN-based admin unlock
+        return self._require_admin()
 
     def _require_admin(self) -> bool:
         """Return True if admin is unlocked, or after successful PIN verification.

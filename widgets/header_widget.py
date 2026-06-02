@@ -166,15 +166,30 @@ class HeaderWidget(QWidget):
         self.refresh_btn.setIconSize(QSize(20, 20))
         self.refresh_btn.setStyleSheet(header_btn_style())
 
+        _locked          = constants.STATUS_LOCKED
+        _registry_admin  = constants.REGISTRY_PERMISSION == "admin"
+
         self.lock_btn = QPushButton()
-        self.lock_btn.setIcon(QIcon(str(ICONS_DIR / "lock.png")))
         self.lock_btn.setCheckable(True)
-        self.lock_btn.setChecked(True)   # starts locked
+        self.lock_btn.setChecked(_locked)
         self.lock_btn.setFixedSize(28, 28)
         self.lock_btn.setIconSize(QSize(20, 20))
         self.lock_btn.setCursor(Qt.PointingHandCursor)
-        self.lock_btn.setToolTip("Status locked  —  click to unlock (admin)")
         self.lock_btn.setStyleSheet(header_btn_style())
+
+        if _registry_admin:
+            # Registry admin — permanently unlocked, non-interactive
+            self.lock_btn.setIcon(QIcon(str(ICONS_DIR / "unlock.png")))
+            self.lock_btn.setEnabled(False)
+            self.lock_btn.setToolTip("Admin access granted by artist registry")
+        else:
+            # Non-admin (reviewer/basic/no registry) — interactive PIN unlock
+            icon_name = "lock.png" if _locked else "unlock.png"
+            self.lock_btn.setIcon(QIcon(str(ICONS_DIR / icon_name)))
+            self.lock_btn.setToolTip(
+                "Status locked  —  click to unlock (admin)" if _locked
+                else "Status unlocked  —  click to lock"
+            )
 
     def update_studio_label(self, name):
         self.studio_label.setText(name)
@@ -272,7 +287,12 @@ class HeaderWidget(QWidget):
         self.lock_toggled.emit(checked)
 
     def set_locked(self, locked: bool):
-        """Update the padlock button to reflect the given lock state."""
+        """Update the padlock button to reflect the given lock state.
+
+        No-op for registry admins — they are permanently unlocked.
+        """
+        if constants.REGISTRY_PERMISSION == "admin":
+            return  # registry admin is always unlocked; ignore lock/unlock calls
         self.lock_btn.blockSignals(True)
         self.lock_btn.setChecked(locked)
         self.lock_btn.blockSignals(False)
@@ -282,6 +302,34 @@ class HeaderWidget(QWidget):
             "Status locked  —  click to unlock (admin)" if locked
             else "Status unlocked  —  click to lock"
         )
+
+    def refresh_lock_state(self):
+        """Fully re-read lock state from constants and update the padlock button.
+
+        Called after apply_registry() re-runs (e.g. when Settings are saved)
+        so the button reflects the new permission level without a restart.
+        """
+        _locked         = constants.STATUS_LOCKED
+        _registry_admin = constants.REGISTRY_PERMISSION == "admin"
+
+        self.lock_btn.blockSignals(True)
+        self.lock_btn.setChecked(_locked)
+
+        if _registry_admin:
+            self.lock_btn.setEnabled(False)
+            self.lock_btn.setIcon(QIcon(str(ICONS_DIR / "unlock.png")))
+            self.lock_btn.setToolTip("Admin access granted by artist registry")
+        else:
+            # Non-admin (reviewer/basic/no registry) — interactive PIN unlock
+            self.lock_btn.setEnabled(True)
+            icon_name = "lock.png" if _locked else "unlock.png"
+            self.lock_btn.setIcon(QIcon(str(ICONS_DIR / icon_name)))
+            self.lock_btn.setToolTip(
+                "Status locked  —  click to unlock (admin)" if _locked
+                else "Status unlocked  —  click to lock"
+            )
+
+        self.lock_btn.blockSignals(False)
 
     def _on_thumb_slider_changed(self, value: int):
         self.thumb_slider.setToolTip(f"{value}px")
