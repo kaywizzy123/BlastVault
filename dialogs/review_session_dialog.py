@@ -793,10 +793,10 @@ class ReviewSessionDialog(QDialog):
         bp = constants.BLAST_PLAYER_PATH
         if bp and Path(str(bp)).is_file():
             try:
-                subprocess.Popen(
-                    [sys.executable, str(bp), file_path],
-                    creationflags=0x00000008 if sys.platform == "win32" else 0,
-                )
+                kwargs = {}
+                if sys.platform == "win32":
+                    kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+                subprocess.Popen([sys.executable, str(bp), file_path], **kwargs)
                 return
             except Exception:
                 pass

@@ -938,6 +938,8 @@ class CenterPanel(QWidget):
         if item.data(Qt.UserRole + 1):   # is folder
             self.load_folder(path)
             self.folder_changed.emit(path)
+        elif Path(path).suffix.lower() in constants.VIDEO_EXTS:
+            self._open_in_blast_player(path)
 
     # ------------------------------------------------------------------ #
     #  Filtering                                                           #
@@ -1307,8 +1309,14 @@ class CenterPanel(QWidget):
                 ext = Path(path).suffix.lower()
                 if ext in constants.VIDEO_EXTS:
                     menu.addSeparator()
-                    player_act = menu.addAction("Open in BlastPlayer")
-                    player_act.triggered.connect(lambda: self._open_in_blast_player(path))
+                    players = self._detect_video_players()
+                    if players:
+                        open_with_menu = menu.addMenu("Open with")
+                        for name, args in players:
+                            act = open_with_menu.addAction(name)
+                            act.triggered.connect(
+                                lambda *_, a=args, p=path: self._open_with_player(a, p)
+                            )
 
                 # ── Submit for Review (all users, not SEQ level) ─────────
                 is_seq = asset_key is not None
@@ -1461,6 +1469,303 @@ class CenterPanel(QWidget):
         selected = self.list_widget.selectedItems()
         if len(selected) == 1 and selected[0].data(Qt.UserRole) in path_set:
             self.file_selected.emit(selected[0].data(Qt.UserRole))
+
+    # ── Installed video-player detection (cross-platform) ───────────────────
+
+    # Extensions / MIME types used to identify video players
+    _SCAN_VIDEO_EXTS  = frozenset([
+        '.mp4', '.mov', '.avi', '.mkv', '.wmv', '.mxf',
+        '.r3d', '.dpx', '.webm', '.flv', '.m4v', '.mpg', '.mpeg',
+    ])
+    _SCAN_VIDEO_MIMES = frozenset([
+        'video/mp4', 'video/quicktime', 'video/x-msvideo',
+        'video/x-matroska', 'video/mpeg', 'video/webm',
+        'video/mxf', 'video/x-flv',
+    ])
+    # macOS UTIs that indicate video support
+    _SCAN_VIDEO_UTIS  = frozenset([
+        'public.movie', 'public.video', 'public.mpeg-4',
+        'public.avi', 'com.apple.quicktime-movie',
+        'org.matroska.mkv', 'public.mpeg',
+    ])
+
+    # Stems / names to exclude (browsers, shells, editors …)
+    _PLAYER_EXCLUDE = frozenset([
+        'blastvault', 'blastplayer',
+        'python', 'pythonw', 'python3',
+        'chrome', 'firefox', 'msedge', 'iexplore', 'opera', 'brave',
+        'explorer', 'notepad', 'wordpad', 'mspaint', 'wmphoto',
+        'photos', 'safari', 'finder', 'preview', 'quicktime player',
+        'totem', 'shotwell', 'rhythmbox', 'nautilus', 'eog',
+        'gimp', 'inkscape', 'chromium', 'google-chrome',
+    ])
+
+    # Friendly display names for well-known exe / app stems
+    _DISPLAY_NAMES = {
+        'vlc':              'VLC',
+        'iina':             'IINA',
+        'wmplayer':         'Windows Media Player',
+        'mpc-hc64':         'MPC-HC',
+        'mpc-hc':           'MPC-HC',
+        'mpc-be64':         'MPC-BE',
+        'mpc-be':           'MPC-BE',
+        'potplayer64':      'PotPlayer',
+        'potplayermini64':  'PotPlayer',
+        'potplayermini':    'PotPlayer',
+        'resolve':          'DaVinci Resolve',
+        'davinci resolve':  'DaVinci Resolve',
+        'keyframepro':      'Keyframe Pro',
+        'keyframe pro':     'Keyframe Pro',
+        'rv':               'RV',
+        'nuke':             'Nuke',
+        'mpv':              'mpv',
+        'smplayer':         'SMPlayer',
+        'kmplayer':         'KMPlayer',
+        'gomplayer':        'GOM Player',
+        'mplayer':          'MPlayer',
+        'celluloid':        'Celluloid',
+        'haruna':           'Haruna',
+    }
+
+    # Cache so the OS scan runs only once per session
+    _player_cache: list | None = None
+
+    def _detect_video_players(self) -> list[tuple[str, list[str]]]:
+        """Return a sorted list of (display_name, launch_args) for every
+        video player found on this machine.  Results are cached.
+
+        launch_args is a list suitable for subprocess.Popen; the file path
+        is appended by _open_with_player before the call.
+        """
+        if self._player_cache is not None:
+            return self._player_cache
+
+        if sys.platform == "win32":
+            result = self._detect_windows_players()
+        elif sys.platform == "darwin":
+            result = self._detect_macos_players()
+        else:
+            result = self._detect_linux_players()
+
+        self.__class__._player_cache = result
+        return result
+
+    # ── Windows ─────────────────────────────────────────────────────────────
+
+    @classmethod
+    def _detect_windows_players(cls) -> list[tuple[str, list[str]]]:
+        import winreg  # stdlib on Windows only
+
+        found: list[tuple[str, list[str]]] = []
+        seen: set[str] = set()
+
+        for hive, root_subkey in [
+            (winreg.HKEY_CLASSES_ROOT, "Applications"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Classes\Applications"),
+        ]:
+            try:
+                with winreg.OpenKey(hive, root_subkey) as apps_key:
+                    idx = 0
+                    while True:
+                        try:
+                            exe_name = winreg.EnumKey(apps_key, idx)
+                        except OSError:
+                            break
+                        idx += 1
+
+                        stem = Path(exe_name).stem.lower()
+                        if stem in cls._PLAYER_EXCLUDE:
+                            continue
+
+                        try:
+                            with winreg.OpenKey(
+                                apps_key, f"{exe_name}\\SupportedTypes"
+                            ) as types_key:
+                                j, is_video = 0, False
+                                while True:
+                                    try:
+                                        ext_val, *_ = winreg.EnumValue(types_key, j)
+                                        j += 1
+                                        if ext_val.lower() in cls._SCAN_VIDEO_EXTS:
+                                            is_video = True
+                                            break
+                                    except OSError:
+                                        break
+                                if not is_video:
+                                    continue
+                        except OSError:
+                            continue
+
+                        exe_path = cls._resolve_windows_exe(exe_name)
+                        if not exe_path or exe_path.lower() in seen:
+                            continue
+                        seen.add(exe_path.lower())
+                        display = cls._DISPLAY_NAMES.get(stem) or Path(exe_name).stem
+                        found.append((display, [exe_path]))
+            except OSError:
+                pass
+
+        return sorted(found, key=lambda x: x[0].lower())
+
+    @staticmethod
+    def _resolve_windows_exe(exe_name: str) -> str | None:
+        import winreg
+        import shutil
+        key_path = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"
+        for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            try:
+                with winreg.OpenKey(hive, key_path) as k:
+                    val, _ = winreg.QueryValueEx(k, "")
+                    val = val.strip('"').strip()
+                    if val and Path(val).is_file():
+                        return val
+            except OSError:
+                pass
+        result = shutil.which(exe_name)
+        return result if result and Path(result).is_file() else None
+
+    # ── macOS ────────────────────────────────────────────────────────────────
+
+    @classmethod
+    def _detect_macos_players(cls) -> list[tuple[str, list[str]]]:
+        import plistlib
+
+        found: list[tuple[str, list[str]]] = []
+        seen: set[str] = set()
+
+        search_dirs = [Path('/Applications'), Path.home() / 'Applications']
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+            for app_path in sorted(search_dir.glob('*.app')):
+                plist_path = app_path / 'Contents' / 'Info.plist'
+                if not plist_path.exists():
+                    continue
+                try:
+                    with open(plist_path, 'rb') as f:
+                        info = plistlib.load(f)
+                except Exception:
+                    continue
+
+                app_name = app_path.stem
+                if app_name.lower() in cls._PLAYER_EXCLUDE:
+                    continue
+
+                # Check CFBundleDocumentTypes for video UTIs or extensions
+                is_video = False
+                for doc in info.get('CFBundleDocumentTypes', []):
+                    for uti in doc.get('LSItemContentTypes', []):
+                        if (uti.lower() in cls._SCAN_VIDEO_UTIS
+                                or 'video' in uti.lower()
+                                or 'movie' in uti.lower()):
+                            is_video = True
+                            break
+                    for ext in doc.get('CFBundleTypeExtensions', []):
+                        if f'.{ext.lower()}' in cls._SCAN_VIDEO_EXTS:
+                            is_video = True
+                            break
+                    if is_video:
+                        break
+
+                if not is_video:
+                    continue
+
+                app_str = str(app_path)
+                if app_str in seen:
+                    continue
+                seen.add(app_str)
+
+                display = (
+                    cls._DISPLAY_NAMES.get(app_name.lower()) or app_name
+                )
+                # macOS: use `open -a <app>` so the OS handles the bundle correctly
+                found.append((display, ['open', '-a', app_str]))
+
+        return sorted(found, key=lambda x: x[0].lower())
+
+    # ── Linux ────────────────────────────────────────────────────────────────
+
+    @classmethod
+    def _detect_linux_players(cls) -> list[tuple[str, list[str]]]:
+        import re
+        import shutil
+
+        found: list[tuple[str, list[str]]] = []
+        seen: set[str] = set()
+
+        desktop_dirs = [
+            Path('/usr/share/applications'),
+            Path('/usr/local/share/applications'),
+            Path.home() / '.local' / 'share' / 'applications',
+        ]
+
+        for desktop_dir in desktop_dirs:
+            if not desktop_dir.exists():
+                continue
+            for desktop_file in sorted(desktop_dir.glob('*.desktop')):
+                try:
+                    content = desktop_file.read_text(encoding='utf-8', errors='ignore')
+                except OSError:
+                    continue
+
+                # Parse only the [Desktop Entry] section
+                props: dict[str, str] = {}
+                in_entry = False
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line == '[Desktop Entry]':
+                        in_entry = True
+                    elif line.startswith('[') and in_entry:
+                        break
+                    elif in_entry and '=' in line and not line.startswith('#'):
+                        k, _, v = line.partition('=')
+                        props[k.strip()] = v.strip()
+
+                if props.get('Type') != 'Application':
+                    continue
+                if props.get('NoDisplay', '').lower() == 'true':
+                    continue
+
+                mime_types = props.get('MimeType', '').split(';')
+                if not any(
+                    m in cls._SCAN_VIDEO_MIMES or m.startswith('video/')
+                    for m in mime_types
+                ):
+                    continue
+
+                exec_str = props.get('Exec', '')
+                if not exec_str:
+                    continue
+
+                # Strip field codes (%f, %F, %u, %U …) and split
+                exec_clean = re.sub(r'%[a-zA-Z]', '', exec_str).strip()
+                parts = exec_clean.split()
+                if not parts:
+                    continue
+
+                cmd = parts[0]
+                stem = Path(cmd).stem.lower()
+                if stem in cls._PLAYER_EXCLUDE:
+                    continue
+
+                resolved = shutil.which(cmd) or cmd
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+
+                name = props.get('Name', Path(desktop_file).stem)
+                display = cls._DISPLAY_NAMES.get(stem) or name
+                found.append((display, [resolved] + parts[1:]))
+
+        return sorted(found, key=lambda x: x[0].lower())
+
+    def _open_with_player(self, args: list, path: str):
+        """Launch an external player described by *args* with *path* appended."""
+        try:
+            subprocess.Popen(args + [path])
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Launch failed", str(e))
 
     def _open_in_blast_player(self, path: str):
         """Launch BlastPlayer in a separate process with *path* pre-loaded."""
