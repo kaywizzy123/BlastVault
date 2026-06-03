@@ -156,6 +156,14 @@ QScrollBar::add-line:horizontal,
 QScrollBar::sub-line:horizontal {{
     width: 0px;
 }}
+QToolTip {{
+    background-color: {BORDER};
+    color: {TEXT_PRI};
+    border: 1px solid {SPLITTER_COLOR};
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+}}
 """
 
 

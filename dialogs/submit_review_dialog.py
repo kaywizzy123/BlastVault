@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
-    QPushButton, QComboBox, QFrame, QScrollArea, QWidget,
+    QPushButton, QComboBox, QFrame, QScrollArea, QWidget, QLineEdit,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
@@ -169,6 +169,34 @@ class SubmitReviewDialog(QDialog):
         self._no_sessions_lbl.setVisible(False)
         outer.addWidget(self._no_sessions_lbl)
 
+        # ── Priority ──────────────────────────────────────────────────────
+        priority_lbl = QLabel("Priority")
+        priority_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
+        )
+        outer.addWidget(priority_lbl)
+
+        self._priority_combo = QComboBox()
+        self._priority_combo.setFixedHeight(32)
+        _PRIORITY_ITEMS = [("Normal", "normal"), ("High", "high"), ("Urgent ⚡", "urgent")]
+        for label, _ in _PRIORITY_ITEMS:
+            self._priority_combo.addItem(label)
+        self._priority_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px; padding: 2px 8px; font-size: 13px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {constants.BORDER};
+                color: {constants.TEXT_PRI};
+                selection-background-color: {constants.ACCENT};
+            }}
+            QComboBox::drop-down {{ border: none; width: 20px; }}
+        """)
+        outer.addWidget(self._priority_combo)
+
         # ── Note (optional) ───────────────────────────────────────────────
         note_lbl = QLabel("Note  (optional)")
         note_lbl.setStyleSheet(
@@ -268,8 +296,6 @@ class SubmitReviewDialog(QDialog):
         """Create a new session — requires admin access."""
         if not self._require_admin():
             return
-        if not constants.REVIEW_TYPES:
-            return
         dlg = _PickSessionTypeDialog(parent=self)
         if dlg.exec_() != QDialog.Accepted:
             return
@@ -317,12 +343,15 @@ class SubmitReviewDialog(QDialog):
         session      = self._sessions[idx]
         session_path = session["path"]
         note         = self._note_field.toPlainText().strip()
+        _priority_map = {"Normal": "normal", "High": "high", "Urgent ⚡": "urgent"}
+        priority     = _priority_map.get(self._priority_combo.currentText(), "normal")
 
         items = [
             {
                 "file_path":       fp,
                 "submitted_by":    constants.CURRENT_USER,
                 "submission_note": note,
+                "priority":        priority,
             }
             for fp in self._file_paths
         ]
@@ -345,12 +374,16 @@ class SubmitReviewDialog(QDialog):
 # ── Inline session-type picker ────────────────────────────────────────────── #
 
 class _PickSessionTypeDialog(QDialog):
-    """Small dialog to pick a session type when creating a new session."""
+    """Small dialog to pick a session type + optional label when creating a session.
+
+    The final session name is  "{type}"  or  "{type} — {label}"  when a label
+    is supplied (e.g. "Director Dailies — AM", "Director Dailies — PM").
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New Review Session")
-        self.setFixedWidth(320)
+        self.setMinimumWidth(400)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
@@ -358,19 +391,10 @@ class _PickSessionTypeDialog(QDialog):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 16, 20, 16)
-        outer.setSpacing(8)
+        outer.setSpacing(10)
 
-        lbl = QLabel("Session Type")
-        lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
-        )
-        outer.addWidget(lbl)
-
-        self._combo = QComboBox()
-        self._combo.addItems(constants.REVIEW_TYPES)
-        self._combo.setFixedHeight(34)
-        self._combo.setStyleSheet(f"""
-            QComboBox {{
+        _combo_style = f"""
+            QComboBox, QLineEdit {{
                 background-color: {constants.BG};
                 color: {constants.TEXT_PRI};
                 border: 1px solid {constants.SPLITTER_COLOR};
@@ -382,9 +406,61 @@ class _PickSessionTypeDialog(QDialog):
                 selection-background-color: {constants.ACCENT};
             }}
             QComboBox::drop-down {{ border: none; width: 20px; }}
-        """)
+            QComboBox QLineEdit {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: none; padding: 2px 4px;
+            }}
+        """
+
+        # ── Session type ──────────────────────────────────────────────────
+        type_lbl = QLabel("Session Type  <i>(pick from list or type a custom name)</i>")
+        type_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
+        )
+        outer.addWidget(type_lbl)
+
+        self._combo = QComboBox()
+        self._combo.setEditable(True)
+        self._combo.setInsertPolicy(QComboBox.NoInsert)
+        self._combo.addItems(constants.REVIEW_TYPES)
+        self._combo.setFixedHeight(34)
+        self._combo.setStyleSheet(_combo_style)
+        if constants.REVIEW_TYPES:
+            self._combo.setCurrentIndex(0)
+        else:
+            self._combo.setCurrentText("")
+        self._combo.lineEdit().setPlaceholderText("e.g. Director Dailies")
         outer.addWidget(self._combo)
 
+        # ── Label (optional) ──────────────────────────────────────────────
+        label_lbl = QLabel(
+            "Label  <i>(optional — use for AM / PM / Round 2, etc.)</i>"
+        )
+        label_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
+        )
+        outer.addWidget(label_lbl)
+
+        self._label_edit = QLineEdit()
+        self._label_edit.setPlaceholderText("e.g.  AM  or  PM  or  Round 2")
+        self._label_edit.setFixedHeight(34)
+        self._label_edit.setStyleSheet(_combo_style)
+        outer.addWidget(self._label_edit)
+
+        # ── Preview ───────────────────────────────────────────────────────
+        self._preview_lbl = QLabel("")
+        self._preview_lbl.setStyleSheet(
+            f"color: {constants.ACCENT_HI}; font-size: 11px;"
+            f"font-style: italic; background: transparent;"
+        )
+        outer.addWidget(self._preview_lbl)
+
+        self._combo.currentTextChanged.connect(self._update_preview)
+        self._label_edit.textChanged.connect(self._update_preview)
+        self._update_preview()
+
+        # ── Buttons ───────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
@@ -422,6 +498,20 @@ class _PickSessionTypeDialog(QDialog):
         btn_row.addWidget(create_btn)
         outer.addLayout(btn_row)
 
+    def _update_preview(self):
+        stype = self._combo.currentText().strip()
+        label = self._label_edit.text().strip()
+        if stype:
+            name = f"{stype} — {label}" if label else stype
+            self._preview_lbl.setText(f"→  {name}")
+        else:
+            self._preview_lbl.setText("")
+
     def _on_create(self):
-        self.selected_type = self._combo.currentText()
+        stype = self._combo.currentText().strip()
+        if not stype:
+            self._combo.lineEdit().setPlaceholderText("Please enter a session type")
+            return
+        label = self._label_edit.text().strip()
+        self.selected_type = f"{stype} — {label}" if label else stype
         self.accept()

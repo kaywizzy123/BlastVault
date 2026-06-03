@@ -20,14 +20,53 @@ Session JSON schema
     "status":       "open",        # "open" | "completed"
     "items": [
         {
-            "id":              "20260530_101523_123456",
-            "file_path":       "C:/SHOWS/.../char_hero_v012.mp4",
-            "submitted_by":    "oogunremi",
-            "submitted_at":    "2026-05-30T10:15:23",
-            "submission_note": "Ready for review",
-            "review_status":   "",   # "" = pending | STATUS_OPTIONS value
-            "reviewer_note":   "",
-            "reviewed_at":     ""
+            "id":                "20260530_101523_123456",
+            "file_path":        "C:/SHOWS/.../char_hero_v012.mp4",
+            "submitted_by":     "oogunremi",
+            "submitted_at":     "2026-05-30T10:15:23",
+            "submission_note":  "Ready for review",
+            "priority":         "normal",   # "normal" | "high" | "urgent"
+            "version":          1,          # increments each resubmission
+            "review_status":    "",         # "" = pending | "Approved" | "Revision" | "On Hold"
+            "reviewer_note":    "",
+            "frame_annotations": [],        # [{start, end, note}]
+            "reviewed_at":      "",
+            "version_history":  []          # previous versions archived here
+        }
+    ]
+}
+
+``version_history`` entry schema
+─────────────────────────────────
+{
+    "version":        1,
+    "file_path":      "...",
+    "submitted_at":   "...",
+    "submission_note":"...",
+    "review_status":  "Revision",
+    "reviewer_note":  "...",
+    "frame_annotations": [],
+    "reviewed_at":    "..."
+}
+
+``frame_annotations`` entry schema
+────────────────────────────────────
+{
+    "start": 24,
+    "end":   48,
+    "note":  "needs more overlap"
+}
+
+Session templates
+─────────────────
+Templates are stored in the catalog's .reviews/templates.json:
+{
+    "templates": [
+        {
+            "name":     "End of Day Dailies",
+            "type":     "Director Dailies",
+            "sequences": ["char", "bg"],
+            "note":     "Standard daily check"
         }
     ]
 }
@@ -39,7 +78,11 @@ import re
 import datetime
 from pathlib import Path
 
-_REVIEWS_DIR = ".reviews"
+_REVIEWS_DIR   = ".reviews"
+_TEMPLATES_FILE = "templates.json"
+
+# Priority ordering for sorting (lower = higher priority in list)
+PRIORITY_ORDER = {"urgent": 0, "high": 1, "normal": 2, "": 2}
 
 
 # ── Path helpers ──────────────────────────────────────────────────────────── #
@@ -59,6 +102,22 @@ def _item_id() -> str:
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
+def _shot_slug(file_path: str) -> str:
+    """Version-agnostic shot identifier for re-submission matching.
+
+    Strips trailing _vXXX / _V### from the filename stem and combines
+    with the parent directory so two files are only considered the same
+    shot when they share both folder and base name.
+
+        SEQ_01/SHOT_01/char_hero_v001.mov  →  …/SHOT_01/char_hero
+        SEQ_01/SHOT_01/char_hero_v002.mov  →  …/SHOT_01/char_hero  ← match
+        SEQ_01/SHOT_02/char_hero_v001.mov  →  …/SHOT_02/char_hero  ← no match
+    """
+    p    = Path(file_path)
+    stem = re.sub(r"_v\d+$", "", p.stem, flags=re.IGNORECASE)
+    return str(p.parent / stem).lower()
+
+
 # ── CRUD ─────────────────────────────────────────────────────────────────── #
 
 def list_sessions(catalog_root: str) -> list[dict]:
@@ -72,6 +131,8 @@ def list_sessions(catalog_root: str) -> list[dict]:
         return []
     result = []
     for f in sorted(d.glob("*.json"), reverse=True):
+        if f.name == _TEMPLATES_FILE:
+            continue
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             data["path"] = str(f)
@@ -123,34 +184,96 @@ def create_session(catalog_root: str, session_type: str) -> str:
 
 
 def add_items(session_path: str | Path, new_items: list[dict]) -> None:
-    """Append submission items to an existing session.
+    """Append or re-version submission items in an existing session.
 
     Each dict in *new_items* must have:
         file_path        str
         submitted_by     str
-        submission_note  str (may be "")
+        submission_note  str   (may be "")
+        priority         str   "normal" | "high" | "urgent"  (default "normal")
 
-    Duplicate file paths (same shot already in the session) are skipped.
+    Re-submission handling:
+        If *file_path* already exists in the session, the previous item is
+        archived to ``version_history`` and a new item is created with
+        ``version`` incremented.  This preserves the review trail while
+        surfacing the latest cut.
     """
     data     = read_session(session_path)
     now      = datetime.datetime.now().isoformat(timespec="seconds")
-    existing = {it["file_path"] for it in data.get("items", [])}
+
+    # Build a lookup: version-slug → list index
+    # This lets char_hero_v002.mov match an existing char_hero_v001.mov entry.
+    items = data.setdefault("items", [])
+    slug_idx: dict[str, int] = {
+        _shot_slug(it["file_path"]): i for i, it in enumerate(items)
+    }
 
     for item in new_items:
-        fp = item.get("file_path", "")
-        if not fp or fp in existing:
+        fp       = item.get("file_path", "")
+        priority = item.get("priority", "normal")
+        if not fp:
             continue
-        data.setdefault("items", []).append({
-            "id":              _item_id(),
-            "file_path":       fp,
-            "submitted_by":    item.get("submitted_by", ""),
-            "submitted_at":    now,
-            "submission_note": item.get("submission_note", ""),
-            "review_status":   "",
-            "reviewer_note":   "",
-            "reviewed_at":     "",
-        })
-        existing.add(fp)
+
+        slug = _shot_slug(fp)
+
+        if slug in slug_idx:
+            # ── Re-submission: archive current, bump version ──────────────
+            old      = items[slug_idx[slug]]
+            old_ver  = old.get("version", 1)
+
+            archive_entry = {
+                "version":           old_ver,
+                "file_path":         old.get("file_path", fp),
+                "submitted_by":      old.get("submitted_by", ""),
+                "submitted_at":      old.get("submitted_at", ""),
+                "submission_note":   old.get("submission_note", ""),
+                "priority":          old.get("priority", "normal"),
+                "review_status":     old.get("review_status", ""),
+                "reviewer_note":     old.get("reviewer_note", ""),
+                "frame_annotations": old.get("frame_annotations", []),
+                "reviewed_at":       old.get("reviewed_at", ""),
+            }
+
+            prev_history = old.get("version_history", [])
+
+            items[slug_idx[slug]] = {
+                "id":                _item_id(),
+                "file_path":         fp,
+                "submitted_by":      item.get("submitted_by", ""),
+                "submitted_at":      now,
+                "submission_note":   item.get("submission_note", ""),
+                "priority":          priority,
+                "version":           old_ver + 1,
+                "review_status":     "",
+                "reviewer_note":     "",
+                "frame_annotations": [],
+                "reviewed_at":       "",
+                "version_history":   prev_history + [archive_entry],
+            }
+        else:
+            # ── New submission ────────────────────────────────────────────
+            new_item = {
+                "id":                _item_id(),
+                "file_path":         fp,
+                "submitted_by":      item.get("submitted_by", ""),
+                "submitted_at":      now,
+                "submission_note":   item.get("submission_note", ""),
+                "priority":          priority,
+                "version":           1,
+                "review_status":     "",
+                "reviewer_note":     "",
+                "frame_annotations": [],
+                "reviewed_at":       "",
+                "version_history":   [],
+            }
+            items.append(new_item)
+            slug_idx[slug] = len(items) - 1
+
+    # Sort items: urgent → high → normal, then by submitted_at
+    items.sort(key=lambda x: (
+        PRIORITY_ORDER.get(x.get("priority", "normal"), 2),
+        x.get("submitted_at", ""),
+    ))
 
     write_session(session_path, data)
 
@@ -160,16 +283,56 @@ def set_item_review(
     item_id: str,
     review_status: str,
     reviewer_note: str,
+    frame_annotations: list[dict] | None = None,
 ) -> None:
     """Set the review outcome for one item and write the session file."""
     data = read_session(session_path)
     now  = datetime.datetime.now().isoformat(timespec="seconds")
     for item in data.get("items", []):
         if item["id"] == item_id:
+            item["review_status"]    = review_status
+            item["reviewer_note"]    = reviewer_note
+            item["frame_annotations"] = frame_annotations or []
+            item["reviewed_at"]      = now if review_status else ""
+            break
+    write_session(session_path, data)
+
+
+def set_item_priority(
+    session_path: str | Path,
+    item_id: str,
+    priority: str,
+) -> None:
+    """Update the priority of a single item."""
+    data = read_session(session_path)
+    for item in data.get("items", []):
+        if item["id"] == item_id:
+            item["priority"] = priority
+            break
+    # Re-sort after priority change
+    items = data.get("items", [])
+    items.sort(key=lambda x: (
+        PRIORITY_ORDER.get(x.get("priority", "normal"), 2),
+        x.get("submitted_at", ""),
+    ))
+    write_session(session_path, data)
+
+
+def batch_set_review(
+    session_path: str | Path,
+    item_ids: list[str],
+    review_status: str,
+    reviewer_note: str,
+) -> None:
+    """Set the same review status on multiple items at once."""
+    data = read_session(session_path)
+    now  = datetime.datetime.now().isoformat(timespec="seconds")
+    id_set = set(item_ids)
+    for item in data.get("items", []):
+        if item["id"] in id_set:
             item["review_status"] = review_status
             item["reviewer_note"] = reviewer_note
             item["reviewed_at"]   = now if review_status else ""
-            break
     write_session(session_path, data)
 
 
@@ -193,6 +356,48 @@ def delete_session(session_path: str | Path) -> None:
         Path(session_path).unlink(missing_ok=True)
     except Exception:
         pass
+
+
+# ── Session templates ─────────────────────────────────────────────────────── #
+
+def _templates_path(catalog_root: str) -> Path:
+    return get_reviews_dir(catalog_root) / _TEMPLATES_FILE
+
+
+def list_templates(catalog_root: str) -> list[dict]:
+    """Return saved session templates for *catalog_root*."""
+    p = _templates_path(catalog_root)
+    if not p.exists():
+        return []
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("templates", [])
+    except Exception:
+        return []
+
+
+def save_template(catalog_root: str, template: dict) -> None:
+    """Save or replace a template by name."""
+    p         = _templates_path(catalog_root)
+    templates = list_templates(catalog_root)
+    # Replace existing with same name
+    templates = [t for t in templates if t.get("name") != template.get("name")]
+    templates.append(template)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        json.dumps({"templates": templates}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def delete_template(catalog_root: str, name: str) -> None:
+    """Remove a template by name."""
+    p         = _templates_path(catalog_root)
+    templates = [t for t in list_templates(catalog_root) if t.get("name") != name]
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        json.dumps({"templates": templates}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
 
 # ── Catalog helpers ───────────────────────────────────────────────────────── #
