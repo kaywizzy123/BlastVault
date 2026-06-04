@@ -33,6 +33,11 @@ def load_config():
             if "review_types" in data:
                 constants.REVIEW_TYPES = data["review_types"]
 
+            constants.CUSTOM_PLAYERS = [
+                p for p in data.get("custom_players", [])
+                if isinstance(p, dict) and p.get("name") and p.get("path")
+            ]
+
             # Tools
             if "blast_player_path" in data:
                 constants.BLAST_PLAYER_PATH = Path(data["blast_player_path"])
@@ -73,7 +78,8 @@ def save_config(catalog_paths=None):
         existing["registry_path"]  = constants.REGISTRY_PATH
         existing["admin_pin_hash"] = constants.ADMIN_PIN_HASH
         existing.pop("supervisor_pin_hash", None)   # remove legacy key
-        existing["review_types"]  = constants.REVIEW_TYPES
+        existing["review_types"]    = constants.REVIEW_TYPES
+        existing["custom_players"]  = constants.CUSTOM_PLAYERS
         # ffmpeg_path is intentionally NOT saved — it is auto-detected at
         # startup via shutil.which so it always reflects the current machine.
         existing.pop("ffmpeg_path", None)   # clean up any legacy value

@@ -139,6 +139,10 @@ ADMIN_PIN_HASH: str = ""
 # Runtime lock state — True = locked (default), False = admin unlocked.
 STATUS_LOCKED: bool = True
 
+# User-defined extra media players — list of {"name": str, "path": str}.
+# Merged with auto-detected players in the "Open with" context menu.
+CUSTOM_PLAYERS: list = []
+
 # Review session types — user-defined, admin-only to modify.
 REVIEW_TYPES: list[str] = [
     "Director Dailies",

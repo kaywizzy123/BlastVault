@@ -261,6 +261,43 @@ class SettingsDialog(QDialog):
         )
         self.review_locked_lbl.setVisible(_locked)
 
+        # ── Players tab ──────────────────────────────────────────────────
+        self.players_section_label = QLabel("Custom Media Players")
+        self.players_section_label.setStyleSheet(self._section_style())
+
+        self.players_hint_label = QLabel(
+            "Players added here always appear in the \"Open with\" menu,\n"
+            "even if they weren't auto-detected (e.g. portable installs)."
+        )
+        self.players_hint_label.setStyleSheet(self._hint_style())
+
+        self.players_list = QListWidget()
+        self.players_list.setStyleSheet(dialog_list_style())
+        self.players_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._populate_players_list()
+
+        self.player_name_input = QLineEdit()
+        self.player_name_input.setPlaceholderText("Display name  (e.g.  Portable VLC)")
+        self.player_name_input.setStyleSheet(input_style())
+
+        self.player_path_input = QLineEdit()
+        self.player_path_input.setPlaceholderText("Path to executable")
+        self.player_path_input.setStyleSheet(input_style())
+
+        self.player_path_browse_btn = QPushButton()
+        self.player_path_browse_btn.setIcon(QIcon(str(constants.ICONS_DIR / "folder.png")))
+        self.player_path_browse_btn.setIconSize(QSize(12, 12))
+        self.player_path_browse_btn.setToolTip("Browse for executable")
+        self.player_path_browse_btn.setStyleSheet(self._btn_style())
+
+        self.player_add_btn = QPushButton()
+        self.player_add_btn.setIcon(QIcon(str(constants.ICONS_DIR / "plus.png")))
+        self.player_add_btn.setIconSize(QSize(12, 12))
+        self.player_add_btn.setStyleSheet(self._btn_style())
+
+        self.player_remove_btn = QPushButton("Remove Selected")
+        self.player_remove_btn.setStyleSheet(self._btn_style(hover_color=constants.FAIL))
+
         # ── Tools tab ────────────────────────────────────────────────────
         self.ffmpeg_section_label = QLabel("FFmpeg")
         self.ffmpeg_section_label.setStyleSheet(self._section_style())
@@ -404,6 +441,29 @@ class SettingsDialog(QDialog):
         dept.addWidget(self.dept_remove_btn)
         dept.addStretch()
 
+        # ── Players tab ──────────────────────────────────────────────────
+        players_tab = QWidget()
+        plv = QVBoxLayout(players_tab)
+        plv.setContentsMargins(15, 15, 15, 15)
+        plv.setSpacing(10)
+
+        plv.addWidget(self.players_section_label)
+        plv.addWidget(self.players_hint_label)
+        plv.addWidget(self.players_list)
+
+        name_row = QHBoxLayout()
+        name_row.addWidget(self.player_name_input)
+        plv.addLayout(name_row)
+
+        path_row = QHBoxLayout()
+        path_row.addWidget(self.player_path_input)
+        path_row.addWidget(self.player_path_browse_btn)
+        path_row.addWidget(self.player_add_btn)
+        plv.addLayout(path_row)
+
+        plv.addWidget(self.player_remove_btn)
+        plv.addStretch()
+
         # ── Tools tab ────────────────────────────────────────────────────
         tools_tab = QWidget()
         tools = QVBoxLayout(tools_tab)
@@ -511,6 +571,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(general_tab,  "General")
         self.tabs.addTab(dept_tab,     "Departments")
         self.tabs.addTab(reviews_tab,  "Reviews")
+        self.tabs.addTab(players_tab,  "Players")
         self.tabs.addTab(tools_tab,    "Tools")
         self.tabs.addTab(pipeline_tab, "Pipeline")
 
@@ -561,6 +622,11 @@ class SettingsDialog(QDialog):
         self.review_down_btn.clicked.connect(self._on_review_type_move_down)
         self.review_input.returnPressed.connect(self._on_review_type_add)
 
+        # Players
+        self.player_path_browse_btn.clicked.connect(self._on_browse_custom_player)
+        self.player_add_btn.clicked.connect(self._on_player_add)
+        self.player_remove_btn.clicked.connect(self._on_player_remove)
+
         # Tools
         self.ffmpeg_test_btn.clicked.connect(self._on_test_ffmpeg)
         self.player_browse_btn.clicked.connect(self._on_browse_player)
@@ -582,6 +648,44 @@ class SettingsDialog(QDialog):
         )
         if path:
             self.studio_root_lineEdit.setText(path)
+
+    # ------------------------------------------------------------------ #
+    #  Players tab slots                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _on_browse_custom_player(self):
+        if sys.platform == "win32":
+            filt = "Executables (*.exe);;All files (*)"
+        elif sys.platform == "darwin":
+            filt = "Applications (*.app);;All files (*)"
+        else:
+            filt = "All files (*)"
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Player Executable", str(Path.home()), filt
+        )
+        if path:
+            self.player_path_input.setText(path)
+            if not self.player_name_input.text().strip():
+                self.player_name_input.setText(Path(path).stem)
+
+    def _on_player_add(self):
+        name = self.player_name_input.text().strip()
+        path = self.player_path_input.text().strip()
+        if not name or not path:
+            return
+        for i in range(self.players_list.count()):
+            if self.players_list.item(i).data(Qt.UserRole) == path:
+                return
+        item = QListWidgetItem(f"{name}  —  {path}")
+        item.setData(Qt.UserRole,     path)
+        item.setData(Qt.UserRole + 1, name)
+        self.players_list.addItem(item)
+        self.player_name_input.clear()
+        self.player_path_input.clear()
+
+    def _on_player_remove(self):
+        for item in self.players_list.selectedItems():
+            self.players_list.takeItem(self.players_list.row(item))
 
     def _on_pattern_add(self):
         text = self.pattern_input.text().strip()
@@ -760,6 +864,7 @@ class SettingsDialog(QDialog):
             self._populate_pattern_list()
             self._populate_dept_list()
             self._populate_review_list()
+            self._populate_players_list()
             self.user_name_lineEdit.setText(constants.CURRENT_USER)
             self.studio_name_lineEdit.setText(constants.STUDIO_NAME)
             self.studio_root_lineEdit.setText(constants.ROOT_DIR)
@@ -817,6 +922,13 @@ class SettingsDialog(QDialog):
                 for i in range(self.review_list.count())
             ]
 
+        # Custom players
+        constants.CUSTOM_PLAYERS = [
+            {"name": self.players_list.item(i).data(Qt.UserRole + 1),
+             "path": self.players_list.item(i).data(Qt.UserRole)}
+            for i in range(self.players_list.count())
+        ]
+
         # Tools
         player = self.player_path_edit.text().strip()
         if player:
@@ -832,6 +944,17 @@ class SettingsDialog(QDialog):
     # ------------------------------------------------------------------ #
     #  Helpers                                                             #
     # ------------------------------------------------------------------ #
+
+    def _populate_players_list(self):
+        self.players_list.clear()
+        for entry in constants.CUSTOM_PLAYERS:
+            name = entry.get("name", "")
+            path = entry.get("path", "")
+            if name and path:
+                item = QListWidgetItem(f"{name}  —  {path}")
+                item.setData(Qt.UserRole,     path)
+                item.setData(Qt.UserRole + 1, name)
+                self.players_list.addItem(item)
 
     def _populate_review_list(self):
         self.review_list.clear()

@@ -1309,6 +1309,10 @@ class CenterPanel(QWidget):
                 ext = Path(path).suffix.lower()
                 if ext in constants.VIDEO_EXTS:
                     menu.addSeparator()
+                    new_win_act = menu.addAction("Open in new BlastPlayer window")
+                    new_win_act.triggered.connect(
+                        lambda *_, p=path: self._launch_new_blast_player(p)
+                    )
                     players = self._detect_video_players()
                     if players:
                         open_with_menu = menu.addMenu("Open with")
@@ -1525,40 +1529,69 @@ class CenterPanel(QWidget):
         'mplayer':          'MPlayer',
         'celluloid':        'Celluloid',
         'haruna':           'Haruna',
+        'quicktimeplayer':  'QuickTime Player',
+        'quicktime':        'QuickTime Player',
     }
 
     # Cache so the OS scan runs only once per session
     _player_cache: list | None = None
+    # Tracks the most recently launched BlastPlayer process
+    _blast_player_proc = None
 
     def _detect_video_players(self) -> list[tuple[str, list[str]]]:
         """Return a sorted list of (display_name, launch_args) for every
-        video player found on this machine.  Results are cached.
+        video player found on this machine, merged with any custom players
+        the user has added in Settings → Players.
 
-        launch_args is a list suitable for subprocess.Popen; the file path
-        is appended by _open_with_player before the call.
+        OS detection is cached per session; custom players are always
+        re-read from constants so Settings changes take effect immediately.
         """
-        if self._player_cache is not None:
-            return self._player_cache
+        if self._player_cache is None:
+            if sys.platform == "win32":
+                self.__class__._player_cache = self._detect_windows_players()
+            elif sys.platform == "darwin":
+                self.__class__._player_cache = self._detect_macos_players()
+            else:
+                self.__class__._player_cache = self._detect_linux_players()
 
-        if sys.platform == "win32":
-            result = self._detect_windows_players()
-        elif sys.platform == "darwin":
-            result = self._detect_macos_players()
-        else:
-            result = self._detect_linux_players()
+        result = list(self._player_cache)
+        detected_paths = {args[0].lower() for _, args in result if args}
 
-        self.__class__._player_cache = result
-        return result
+        for entry in constants.CUSTOM_PLAYERS:
+            name = entry.get("name", "").strip()
+            path = entry.get("path", "").strip()
+            if name and path and Path(path).is_file():
+                if path.lower() not in detected_paths:
+                    result.append((name, [path]))
+
+        return sorted(result, key=lambda x: x[0].lower())
 
     # ── Windows ─────────────────────────────────────────────────────────────
 
     @classmethod
     def _detect_windows_players(cls) -> list[tuple[str, list[str]]]:
-        import winreg  # stdlib on Windows only
+        import winreg
+        import os
+        import re
 
         found: list[tuple[str, list[str]]] = []
         seen: set[str] = set()
 
+        def _try_add(exe_path: str) -> None:
+            exe_path = os.path.expandvars(exe_path.strip('"').strip())
+            if not exe_path or not Path(exe_path).is_file():
+                return
+            key = exe_path.lower()
+            if key in seen:
+                return
+            stem = Path(exe_path).stem.lower()
+            if stem in cls._PLAYER_EXCLUDE:
+                return
+            seen.add(key)
+            display = cls._DISPLAY_NAMES.get(stem) or Path(exe_path).stem
+            found.append((display, [exe_path]))
+
+        # --- Scan 1: HKCR\Applications\*\SupportedTypes ---
         for hive, root_subkey in [
             (winreg.HKEY_CLASSES_ROOT, "Applications"),
             (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Classes\Applications"),
@@ -1593,15 +1626,74 @@ class CenterPanel(QWidget):
                                         break
                                 if not is_video:
                                     continue
-                        except OSError:
-                            continue
 
-                        exe_path = cls._resolve_windows_exe(exe_name)
-                        if not exe_path or exe_path.lower() in seen:
+                            exe_path = cls._resolve_windows_exe(exe_name)
+                            if exe_path:
+                                _try_add(exe_path)
+                        except OSError:
+                            # No SupportedTypes — try ProgID fallback:
+                            # some apps (e.g. Keyframe Pro) register as
+                            # HKCR\<AppStem>.<ext>\shell\open\command instead.
+                            app_stem = Path(exe_name).stem
+                            for vid_ext in cls._SCAN_VIDEO_EXTS:
+                                progid = f"{app_stem}{vid_ext}"
+                                try:
+                                    with winreg.OpenKey(
+                                        winreg.HKEY_CLASSES_ROOT,
+                                        f"{progid}\\shell\\open\\command",
+                                    ) as cmd_key:
+                                        cmd, _ = winreg.QueryValueEx(cmd_key, "")
+                                        cmd = cmd.strip()
+                                        m = re.match(r'"([^"]+\.exe)"', cmd, re.IGNORECASE)
+                                        if m:
+                                            _try_add(m.group(1))
+                                        else:
+                                            m = re.match(r'(.+?\.exe)', cmd, re.IGNORECASE)
+                                            if m:
+                                                _try_add(m.group(1))
+                                        break
+                                except OSError:
+                                    pass
+            except OSError:
+                pass
+
+        # --- Scan 2: HKCR\.ext\OpenWithProgids → shell\open\command ---
+        # Catches players (e.g. QuickTime) that register via ProgIDs only.
+        seen_progids: set[str] = set()
+        for ext in cls._SCAN_VIDEO_EXTS:
+            try:
+                with winreg.OpenKey(
+                    winreg.HKEY_CLASSES_ROOT, f"{ext}\\OpenWithProgids"
+                ) as k:
+                    j = 0
+                    while True:
+                        try:
+                            progid, *_ = winreg.EnumValue(k, j)
+                            j += 1
+                        except OSError:
+                            break
+                        if not progid or progid in seen_progids:
                             continue
-                        seen.add(exe_path.lower())
-                        display = cls._DISPLAY_NAMES.get(stem) or Path(exe_name).stem
-                        found.append((display, [exe_path]))
+                        seen_progids.add(progid)
+                        try:
+                            with winreg.OpenKey(
+                                winreg.HKEY_CLASSES_ROOT,
+                                f"{progid}\\shell\\open\\command",
+                            ) as cmd_key:
+                                cmd, _ = winreg.QueryValueEx(cmd_key, "")
+                                cmd = cmd.strip()
+                                # Extract exe path: quoted or unquoted up to .exe
+                                m = re.match(r'"([^"]+\.exe)"', cmd, re.IGNORECASE)
+                                if m:
+                                    exe_path = m.group(1)
+                                else:
+                                    m = re.match(r'(.+?\.exe)', cmd, re.IGNORECASE)
+                                    if not m:
+                                        continue
+                                    exe_path = m.group(1)
+                                _try_add(exe_path)
+                        except OSError:
+                            pass
             except OSError:
                 pass
 
@@ -1611,12 +1703,13 @@ class CenterPanel(QWidget):
     def _resolve_windows_exe(exe_name: str) -> str | None:
         import winreg
         import shutil
+        import os
         key_path = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"
         for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
             try:
                 with winreg.OpenKey(hive, key_path) as k:
                     val, _ = winreg.QueryValueEx(k, "")
-                    val = val.strip('"').strip()
+                    val = os.path.expandvars(val.strip('"').strip())
                     if val and Path(val).is_file():
                         return val
             except OSError:
@@ -1768,7 +1861,24 @@ class CenterPanel(QWidget):
             QMessageBox.critical(self, "Launch failed", str(e))
 
     def _open_in_blast_player(self, path: str):
-        """Launch BlastPlayer in a separate process with *path* pre-loaded."""
+        """Reuse running BlastPlayer if alive; otherwise launch a new one."""
+        import tempfile
+        cls = self.__class__
+        proc = cls._blast_player_proc
+        if proc is not None and proc.poll() is None:
+            # BlastPlayer is still running — write a request file that its
+            # QFileSystemWatcher will pick up and load immediately.
+            req = Path(tempfile.gettempdir()) / "blastvault_player_request.txt"
+            try:
+                req.unlink(missing_ok=True)   # delete first so all platforms see a creation event
+                req.write_text(path, encoding="utf-8")
+            except OSError:
+                pass
+            return
+        cls._blast_player_proc = self._launch_new_blast_player(path)
+
+    def _launch_new_blast_player(self, path: str):
+        """Always spawn a fresh BlastPlayer process."""
         from PyQt5.QtCore import QTimer
         from PyQt5.QtWidgets import QMessageBox
 
@@ -1797,8 +1907,10 @@ class CenterPanel(QWidget):
                         msg += f"\n\n{err}"
                     QMessageBox.critical(self, "BlastPlayer failed to start", msg)
             QTimer.singleShot(800, _check)
+            return proc
         except Exception as e:
             QMessageBox.critical(self, "Launch failed", str(e))
+        return None
 
     def _reveal_in_explorer(self, path: str):
         """Open the file's parent folder and select/highlight the file."""
