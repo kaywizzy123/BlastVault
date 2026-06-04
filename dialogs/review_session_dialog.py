@@ -788,18 +788,47 @@ class ReviewSessionDialog(QDialog):
     # ------------------------------------------------------------------ #
 
     def _play_file(self, file_path: str):
+        from PyQt5.QtCore import QTimer
+        from PyQt5.QtWidgets import QMessageBox
+
         if not file_path or not Path(file_path).exists():
+            QMessageBox.warning(
+                self, "File not found",
+                f"Cannot locate the file:\n{file_path}"
+            )
             return
+
         bp = constants.BLAST_PLAYER_PATH
         if bp and Path(str(bp)).is_file():
             try:
-                kwargs = {}
+                kwargs: dict = {
+                    "stderr": subprocess.PIPE,
+                    "cwd":    str(Path(str(bp)).parent),
+                }
                 if sys.platform == "win32":
                     kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-                subprocess.Popen([sys.executable, str(bp), file_path], **kwargs)
+                proc = subprocess.Popen(
+                    [sys.executable, str(bp), file_path], **kwargs
+                )
+
+                # After 800 ms check if the process already exited — if it did,
+                # show whatever it printed to stderr so the failure is visible.
+                def _check():
+                    if proc.poll() is not None:
+                        err = proc.stderr.read().decode(errors="replace").strip()
+                        msg = "BlastPlayer exited immediately."
+                        if err:
+                            msg += f"\n\n{err}"
+                        QMessageBox.critical(self, "BlastPlayer failed to start", msg)
+                QTimer.singleShot(800, _check)
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                QMessageBox.critical(
+                    self, "Could not launch BlastPlayer", str(exc)
+                )
+                return
+
+        # BlastPlayer not found — open with the OS default video handler
         try:
             if sys.platform == "win32":
                 subprocess.Popen(["start", "", file_path], shell=True)
@@ -807,8 +836,8 @@ class ReviewSessionDialog(QDialog):
                 subprocess.Popen(["open", file_path])
             else:
                 subprocess.Popen(["xdg-open", file_path])
-        except Exception:
-            pass
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not open file", str(exc))
 
     def _on_review(self, item_id: str, review_status: str,
                    existing_note: str = "", existing_annotations: list | None = None):

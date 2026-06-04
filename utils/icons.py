@@ -194,8 +194,12 @@ def get_file_icon(path, icon_size) -> QIcon:
 # ──────────────────────────────────────────────────────────────────────────── #
 
 def get_video_cache_path(path: str) -> str:
-    safe = path.replace("\\", "_").replace("/", "_").replace(":", "_")
-    return str(THUMB_CACHE_DIR / (safe + "_thumb.jpg"))
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = 0.0
+    digest = hashlib.md5(f"{path}:{mtime}".encode()).hexdigest()
+    return str(THUMB_CACHE_DIR / (digest + "_thumb.jpg"))
 
 
 def get_cached_video_icon(path, icon_size) -> QIcon | None:

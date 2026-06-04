@@ -1769,9 +1769,11 @@ class CenterPanel(QWidget):
 
     def _open_in_blast_player(self, path: str):
         """Launch BlastPlayer in a separate process with *path* pre-loaded."""
+        from PyQt5.QtCore import QTimer
+        from PyQt5.QtWidgets import QMessageBox
+
         player = constants.BLAST_PLAYER_PATH
         if not player.is_file():
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self, "BlastPlayer not found",
                 f"Could not locate BlastPlayer at:\n{player}\n\n"
@@ -1779,9 +1781,23 @@ class CenterPanel(QWidget):
             )
             return
         try:
-            subprocess.Popen([sys.executable, str(player), path])
+            kwargs: dict = {
+                "stderr": subprocess.PIPE,
+                "cwd":    str(player.parent),
+            }
+            if sys.platform == "win32":
+                kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+            proc = subprocess.Popen([sys.executable, str(player), path], **kwargs)
+
+            def _check():
+                if proc.poll() is not None:
+                    err = proc.stderr.read().decode(errors="replace").strip()
+                    msg = "BlastPlayer exited immediately."
+                    if err:
+                        msg += f"\n\n{err}"
+                    QMessageBox.critical(self, "BlastPlayer failed to start", msg)
+            QTimer.singleShot(800, _check)
         except Exception as e:
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Launch failed", str(e))
 
     def _reveal_in_explorer(self, path: str):

@@ -64,9 +64,12 @@ class SettingsDialog(QDialog):
         self.studio_root_label    = QLabel("Studio Root:")
         self.studio_root_lineEdit = QLineEdit()
         self.studio_root_lineEdit.setText(constants.ROOT_DIR)
-        self.studio_root_lineEdit.setPlaceholderText(
-            r"e.g.  Z:\SHOWS  or  \\server\shows  or  /Volumes/server/shows"
+        _root_hint = (
+            r"e.g.  Z:\SHOWS  or  \\server\shows" if sys.platform == "win32"
+            else "e.g.  /Volumes/server/shows  or  ~/Shows" if sys.platform == "darwin"
+            else "e.g.  /mnt/server/shows  or  ~/shows"
         )
+        self.studio_root_lineEdit.setPlaceholderText(_root_hint)
         self.studio_root_lineEdit.setStyleSheet(self._input_style())
 
         self.studio_root_browse_btn = QPushButton()

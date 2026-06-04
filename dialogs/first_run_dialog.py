@@ -110,9 +110,12 @@ class FirstRunDialog(QDialog):
 
         self.root_lineEdit = QLineEdit()
         self.root_lineEdit.setText(constants.ROOT_DIR)
-        self.root_lineEdit.setPlaceholderText(
-            r"e.g.  Z:\SHOWS  or  \\server\shows  or  /Volumes/server/shows"
+        _root_hint = (
+            r"e.g.  Z:\SHOWS  or  \\server\shows" if sys.platform == "win32"
+            else "e.g.  /Volumes/server/shows  or  ~/Shows" if sys.platform == "darwin"
+            else "e.g.  /mnt/server/shows  or  ~/shows"
         )
+        self.root_lineEdit.setPlaceholderText(_root_hint)
         self.root_lineEdit.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {constants.BORDER};
