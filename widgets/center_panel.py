@@ -1361,6 +1361,22 @@ class CenterPanel(QWidget):
                 lambda: self._copy_to_clipboard("\n".join(paths))
             )
 
+            # "Play all in BlastPlayer" — video files only
+            video_paths = [
+                it.data(Qt.UserRole)
+                for it in items
+                if not it.data(Qt.UserRole + 1)
+                and Path(it.data(Qt.UserRole)).suffix.lower() in constants.VIDEO_EXTS
+            ]
+            if video_paths:
+                menu.addSeparator()
+                play_all_act = menu.addAction(
+                    f"Play all in BlastPlayer  ({len(video_paths)} videos)"
+                )
+                play_all_act.triggered.connect(
+                    lambda *_, vp=video_paths: self._open_playlist_in_blast_player(vp)
+                )
+
             # Exclude folders (UserRole+1) and SEQ items (UserRole+3)
             file_paths = [
                 it.data(Qt.UserRole)
@@ -1866,8 +1882,6 @@ class CenterPanel(QWidget):
         cls = self.__class__
         proc = cls._blast_player_proc
         if proc is not None and proc.poll() is None:
-            # BlastPlayer is still running — write a request file that its
-            # QFileSystemWatcher will pick up and load immediately.
             req = Path(tempfile.gettempdir()) / "blastvault_player_request.txt"
             try:
                 req.unlink(missing_ok=True)   # delete first so all platforms see a creation event
@@ -1877,8 +1891,30 @@ class CenterPanel(QWidget):
             return
         cls._blast_player_proc = self._launch_new_blast_player(path)
 
+    def _open_playlist_in_blast_player(self, paths: list):
+        """Open multiple videos in BlastPlayer as a playlist.
+
+        Reuses a running instance via IPC; otherwise spawns a new one.
+        """
+        import tempfile
+        cls = self.__class__
+        proc = cls._blast_player_proc
+        if proc is not None and proc.poll() is None:
+            req = Path(tempfile.gettempdir()) / "blastvault_player_request.txt"
+            try:
+                req.unlink(missing_ok=True)
+                req.write_text("\n".join(paths), encoding="utf-8")
+            except OSError:
+                pass
+            return
+        cls._blast_player_proc = self._launch_blast_player_with_paths(paths)
+
     def _launch_new_blast_player(self, path: str):
-        """Always spawn a fresh BlastPlayer process."""
+        """Always spawn a fresh BlastPlayer process with a single video."""
+        return self._launch_blast_player_with_paths([path])
+
+    def _launch_blast_player_with_paths(self, paths: list):
+        """Spawn a fresh BlastPlayer process, passing *paths* as CLI arguments."""
         from PyQt5.QtCore import QTimer
         from PyQt5.QtWidgets import QMessageBox
 
@@ -1889,7 +1925,7 @@ class CenterPanel(QWidget):
                 f"Could not locate BlastPlayer at:\n{player}\n\n"
                 "Check that BlastPlayer is installed alongside BlastVault."
             )
-            return
+            return None
         try:
             kwargs: dict = {
                 "stderr": subprocess.PIPE,
@@ -1897,7 +1933,9 @@ class CenterPanel(QWidget):
             }
             if sys.platform == "win32":
                 kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
-            proc = subprocess.Popen([sys.executable, str(player), path], **kwargs)
+            proc = subprocess.Popen(
+                [sys.executable, str(player)] + list(paths), **kwargs
+            )
 
             def _check():
                 if proc.poll() is not None:
