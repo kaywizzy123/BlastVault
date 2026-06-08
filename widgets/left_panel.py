@@ -101,6 +101,47 @@ class LeftPanel(QWidget):
                 catalog.removeChild(catalog.child(0))
             self.add_children(catalog, catalog.data(0, Qt.UserRole))
 
+    def refresh_path(self, path: str):
+        """Re-scan the children of the tree node matching *path*.
+
+        Called after a silent auto-reload so newly added subfolders appear
+        without the user having to collapse and re-expand the node.
+        Preserves the expanded state of any already-visible children.
+        """
+        if not path:
+            return
+
+        def _refresh_node(item: QTreeWidgetItem):
+            node_path = item.data(0, Qt.UserRole)
+            if node_path == path:
+                # Remember which child paths were expanded
+                expanded_children: set[str] = set()
+                for j in range(item.childCount()):
+                    child = item.child(j)
+                    if child.isExpanded():
+                        expanded_children.add(child.data(0, Qt.UserRole) or "")
+
+                # Rebuild children from the filesystem
+                while item.childCount():
+                    item.removeChild(item.child(0))
+                self.add_children(item, path)
+
+                # Restore expanded state
+                for j in range(item.childCount()):
+                    child = item.child(j)
+                    if child.data(0, Qt.UserRole) in expanded_children:
+                        self.tree_widget.expandItem(child)
+                return True
+            for j in range(item.childCount()):
+                if _refresh_node(item.child(j)):
+                    return True
+            return False
+
+        root = self.tree_widget.invisibleRootItem()
+        for i in range(root.childCount()):
+            if _refresh_node(root.child(i)):
+                break
+
     def add_children(self, parent_item, path):
         directory = QDir(path)
         directory.setFilter(QDir.Dirs | QDir.NoDotAndDotDot)
