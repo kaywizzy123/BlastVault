@@ -534,8 +534,8 @@ class CenterPanel(QWidget):
         ep_layout.addStretch(4)
 
         self._stack = QStackedWidget()
-        self._stack.addWidget(loading_page)      # index 0 — loading
-        self._stack.addWidget(self.list_widget)  # index 1 — content
+        self._stack.addWidget(loading_page)        # index 0 — loading
+        self._stack.addWidget(self.list_widget)    # index 1 — content
         self._stack.addWidget(empty_page)        # index 2 — empty / welcome
 
         # Show welcome state on startup — no folder selected yet
@@ -555,7 +555,7 @@ class CenterPanel(QWidget):
         self._clear_filters_btn.clicked.connect(self._on_clear_filters)
 
     def _setup_watcher(self):
-        """Initialise the folder watcher and its 2-second debounce timer."""
+        """Initialise the folder watcher, debounce timer, and mtime poll fallback."""
         self._watcher = QFileSystemWatcher(self)
         self._watcher.directoryChanged.connect(self._on_directory_changed)
 
@@ -563,6 +563,14 @@ class CenterPanel(QWidget):
         self._reload_timer.setSingleShot(True)
         self._reload_timer.setInterval(2000)          # 2 s debounce
         self._reload_timer.timeout.connect(self._silent_reload)
+
+        # Polling fallback — catches events QFileSystemWatcher misses on some
+        # platforms (Windows removePath/addPath race, network shares, etc.).
+        self._last_folder_mtime: float = 0.0
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(5000)            # 5 s poll
+        self._poll_timer.timeout.connect(self._poll_folder_mtime)
+        self._poll_timer.start()
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #
@@ -582,6 +590,7 @@ class CenterPanel(QWidget):
             return
 
         self.current_path = path
+        self._last_folder_mtime = 0.0   # reset so poll doesn't fire immediately
         self._reset_hover()
         self.list_widget.clear()
 
@@ -1188,6 +1197,18 @@ class CenterPanel(QWidget):
         """Received from QFileSystemWatcher; (re)starts the debounce timer."""
         self._reload_timer.start()    # calling start() on a running timer resets it
 
+    def _poll_folder_mtime(self):
+        """Fallback: detect folder changes that QFileSystemWatcher missed."""
+        if not self.current_path or self._reload_timer.isActive():
+            return
+        try:
+            mtime = Path(self.current_path).stat().st_mtime
+        except OSError:
+            return
+        if self._last_folder_mtime and mtime != self._last_folder_mtime:
+            self._reload_timer.start()
+        self._last_folder_mtime = mtime
+
     def _silent_reload(self):
         """Reload the current folder with no loading flash, then signal the footer."""
         if not self.current_path:
@@ -1196,6 +1217,11 @@ class CenterPanel(QWidget):
         pos = sb.value()
         self.load_folder(self.current_path, _silent=True)
         sb.setValue(pos)
+        # Refresh the mtime baseline so the next poll doesn't re-trigger
+        try:
+            self._last_folder_mtime = Path(self.current_path).stat().st_mtime
+        except OSError:
+            pass
         self.auto_refreshed.emit()
 
     def _watch_subdirs(self, root: Path, max_depth: int = 3):
