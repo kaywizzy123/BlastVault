@@ -38,7 +38,11 @@ class SplashScreen(QWidget):
                 border: 1px solid {constants.SPLITTER_COLOR};
             }}
         """)
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
+    def create_widgets(self):
         # ── Logo ─────────────────────────────────────────────────────────
         self._logo_lbl = QLabel()
         self._logo_lbl.setAlignment(Qt.AlignCenter)
@@ -99,7 +103,7 @@ class SplashScreen(QWidget):
             font-size: 11px;
         """)
 
-        # ── Layout ────────────────────────────────────────────────────────
+    def create_layout(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 28, 30, 20)
         layout.setSpacing(0)
@@ -121,6 +125,9 @@ class SplashScreen(QWidget):
             screen.center().x() - self.width()  // 2,
             screen.center().y() - self.height() // 2,
         )
+
+    def create_connections(self):
+        pass
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #

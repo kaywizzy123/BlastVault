@@ -58,49 +58,16 @@ class ReviewManagerDialog(QDialog):
         )
         self.setStyleSheet(f"background-color: {constants.BORDER};")
 
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
         self._load_sessions()
 
     # ------------------------------------------------------------------ #
     #  UI scaffold                                                         #
     # ------------------------------------------------------------------ #
 
-    def _build_ui(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(24, 20, 24, 20)
-        outer.setSpacing(10)
-
-        # ── Icon + title (single compact row) ────────────────────────────
-        header_row = QHBoxLayout()
-        header_row.setSpacing(8)
-
-        icon_lbl = QLabel()
-        pix = QPixmap(str(constants.ICONS_DIR / "dashboards.png"))
-        if not pix.isNull():
-            icon_lbl.setPixmap(
-                pix.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        icon_lbl.setStyleSheet("background: transparent;")
-        header_row.addWidget(icon_lbl)
-
-        title_lbl = QLabel("Review Sessions")
-        title_lbl.setStyleSheet(
-            f"font-size: 14px; font-weight: bold;"
-            f"color: {constants.TEXT_PRI}; background: transparent;"
-        )
-        header_row.addWidget(title_lbl, stretch=1)
-        outer.addLayout(header_row)
-
-        sep0 = QFrame()
-        sep0.setFrameShape(QFrame.HLine)
-        sep0.setFixedHeight(1)
-        sep0.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
-        outer.addWidget(sep0)
-
-        # ── Search + filter bar ───────────────────────────────────────────
-        filter_bar = QHBoxLayout()
-        filter_bar.setSpacing(8)
-
+    def create_widgets(self):
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Search sessions…")
         self._search_box.setFixedHeight(32)
@@ -113,18 +80,13 @@ class ReviewManagerDialog(QDialog):
                 padding: 4px 10px 4px 32px;
                 font-size: 12px;
             }}
-            QLineEdit:focus {{
-                border-color: {constants.ACCENT_HI};
-            }}
+            QLineEdit:focus {{ border-color: {constants.ACCENT_HI}; }}
         """)
         _search_icon_action = QAction(
             QIcon(str(constants.ICONS_DIR / "search.png")), "", self._search_box
         )
         self._search_box.addAction(_search_icon_action, QLineEdit.LeadingPosition)
-        self._search_box.textChanged.connect(self._on_search_changed)
-        filter_bar.addWidget(self._search_box, stretch=1)
 
-        # Status filter chips
         self._filter_btns: dict[str, QPushButton] = {}
         for label in [_FILTER_ALL, _FILTER_OPEN, _FILTER_COMPLETED]:
             btn = QPushButton(label)
@@ -132,20 +94,15 @@ class ReviewManagerDialog(QDialog):
             btn.setCursor(Qt.PointingHandCursor)
             btn.setCheckable(True)
             btn.setChecked(label == _FILTER_ALL)
-            btn.clicked.connect(lambda *_, _l=label: self._set_filter(_l))
             self._filter_btns[label] = btn
-            filter_bar.addWidget(btn)
-
         self._apply_filter_styles()
-        outer.addLayout(filter_bar)
 
-        # ── Session list (scroll area) ────────────────────────────────────
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._scroll.setStyleSheet(
-            f"QScrollArea {{ background: transparent; border: none; }}"
+            "QScrollArea { background: transparent; border: none; }"
         )
 
         self._list_container = QWidget()
@@ -154,25 +111,18 @@ class ReviewManagerDialog(QDialog):
         self._list_layout.setContentsMargins(0, 0, 0, 0)
         self._list_layout.setSpacing(6)
         self._list_layout.addStretch()
-
         self._scroll.setWidget(self._list_container)
-        outer.addWidget(self._scroll, stretch=1)
 
-        # ── Empty-state label ─────────────────────────────────────────────
         self._empty_lbl = QLabel("No sessions match your search.")
         self._empty_lbl.setAlignment(Qt.AlignCenter)
         self._empty_lbl.setStyleSheet(
             f"color: {constants.TEXT_SEC}; font-size: 12px; background: transparent;"
         )
         self._empty_lbl.setVisible(False)
-        outer.addWidget(self._empty_lbl, stretch=1)
 
-        # ── Bottom toolbar ────────────────────────────────────────────────
-        toolbar = QHBoxLayout()
-        toolbar.setSpacing(8)
-
+        self._new_btn  = None
+        self._tmpl_btn = None
         if constants.can_admin():
-            # "New Session" button
             self._new_btn = QPushButton("+ New Session")
             self._new_btn.setFixedHeight(32)
             self._new_btn.setCursor(Qt.PointingHandCursor)
@@ -184,10 +134,7 @@ class ReviewManagerDialog(QDialog):
                 }}
                 QPushButton:hover {{ background-color: #1a95e8; }}
             """)
-            self._new_btn.clicked.connect(self._on_new_session)
-            toolbar.addWidget(self._new_btn)
 
-            # "From Template" button
             self._tmpl_btn = QPushButton("☰ Templates")
             self._tmpl_btn.setFixedHeight(32)
             self._tmpl_btn.setCursor(Qt.PointingHandCursor)
@@ -204,15 +151,11 @@ class ReviewManagerDialog(QDialog):
                     color: {constants.TEXT_PRI};
                 }}
             """)
-            self._tmpl_btn.clicked.connect(self._on_open_templates)
-            toolbar.addWidget(self._tmpl_btn)
 
-        toolbar.addStretch()
-
-        close_btn = QPushButton("Close")
-        close_btn.setFixedHeight(32)
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setStyleSheet(f"""
+        self._close_btn = QPushButton("Close")
+        self._close_btn.setFixedHeight(32)
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {constants.ACCENT};
                 color: {constants.TEXT_SEC};
@@ -223,10 +166,65 @@ class ReviewManagerDialog(QDialog):
                 color: {constants.TEXT_PRI};
             }}
         """)
-        close_btn.clicked.connect(self.accept)
-        toolbar.addWidget(close_btn)
 
+    def create_layout(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(24, 20, 24, 20)
+        outer.setSpacing(10)
+
+        header_row = QHBoxLayout()
+        header_row.setSpacing(8)
+        icon_lbl = QLabel()
+        pix = QPixmap(str(constants.ICONS_DIR / "dashboards.png"))
+        if not pix.isNull():
+            icon_lbl.setPixmap(
+                pix.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        icon_lbl.setStyleSheet("background: transparent;")
+        header_row.addWidget(icon_lbl)
+        title_lbl = QLabel("Review Sessions")
+        title_lbl.setStyleSheet(
+            f"font-size: 14px; font-weight: bold;"
+            f"color: {constants.TEXT_PRI}; background: transparent;"
+        )
+        header_row.addWidget(title_lbl, stretch=1)
+        outer.addLayout(header_row)
+
+        sep0 = QFrame()
+        sep0.setFrameShape(QFrame.HLine)
+        sep0.setFixedHeight(1)
+        sep0.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
+        outer.addWidget(sep0)
+
+        filter_bar = QHBoxLayout()
+        filter_bar.setSpacing(8)
+        filter_bar.addWidget(self._search_box, stretch=1)
+        for btn in self._filter_btns.values():
+            filter_bar.addWidget(btn)
+        outer.addLayout(filter_bar)
+
+        outer.addWidget(self._scroll, stretch=1)
+        outer.addWidget(self._empty_lbl, stretch=1)
+
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(8)
+        if self._new_btn is not None:
+            toolbar.addWidget(self._new_btn)
+        if self._tmpl_btn is not None:
+            toolbar.addWidget(self._tmpl_btn)
+        toolbar.addStretch()
+        toolbar.addWidget(self._close_btn)
         outer.addLayout(toolbar)
+
+    def create_connections(self):
+        self._search_box.textChanged.connect(self._on_search_changed)
+        for label, btn in self._filter_btns.items():
+            btn.clicked.connect(lambda *_, _l=label: self._set_filter(_l))
+        if self._new_btn is not None:
+            self._new_btn.clicked.connect(self._on_new_session)
+        if self._tmpl_btn is not None:
+            self._tmpl_btn.clicked.connect(self._on_open_templates)
+        self._close_btn.clicked.connect(self.accept)
 
     # ------------------------------------------------------------------ #
     #  Filter helpers                                                      #
@@ -623,9 +621,59 @@ class _SaveTemplateDialog(QDialog):
         self.setMinimumWidth(380)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
-    def _build_ui(self):
+    def create_widgets(self):
+        _field_style = f"""
+            QLineEdit {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px; padding: 4px 10px; font-size: 12px;
+            }}
+            QLineEdit:focus {{ border-color: {constants.ACCENT_HI}; }}
+        """
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("e.g. End of Day Dailies")
+        self._name_edit.setText(self._session.get("session_type", ""))
+        self._name_edit.setFixedHeight(32)
+        self._name_edit.setStyleSheet(_field_style)
+
+        self._note_edit = QLineEdit()
+        self._note_edit.setPlaceholderText("Brief description of this template")
+        self._note_edit.setFixedHeight(32)
+        self._note_edit.setStyleSheet(_field_style)
+
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setFixedHeight(30)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_SEC};
+                border: none; border-radius: 4px; padding: 2px 14px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_PRI};
+            }}
+        """)
+
+        self._save_btn = QPushButton("Save Template")
+        self._save_btn.setFixedHeight(30)
+        self._save_btn.setCursor(Qt.PointingHandCursor)
+        self._save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white; border: none; border-radius: 4px;
+                padding: 2px 14px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: #1a95e8; }}
+        """)
+
+    def create_layout(self):
         vl = QVBoxLayout(self)
         vl.setContentsMargins(22, 20, 22, 20)
         vl.setSpacing(12)
@@ -643,78 +691,30 @@ class _SaveTemplateDialog(QDialog):
         sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
         vl.addWidget(sep)
 
-        # Template name
         name_lbl = QLabel("Template name:")
         name_lbl.setStyleSheet(
             f"color: {constants.TEXT_PRI}; font-size: 12px; background: transparent;"
         )
         vl.addWidget(name_lbl)
-
-        session_type = self._session.get("session_type", "")
-        self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. End of Day Dailies")
-        self._name_edit.setText(session_type)
-        self._name_edit.setFixedHeight(32)
-        self._name_edit.setStyleSheet(f"""
-            QLineEdit {{
-                background-color: {constants.BG};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px; padding: 4px 10px; font-size: 12px;
-            }}
-            QLineEdit:focus {{ border-color: {constants.ACCENT_HI}; }}
-        """)
         vl.addWidget(self._name_edit)
 
-        # Note field
         note_lbl = QLabel("Note <i>(optional)</i>:")
         note_lbl.setStyleSheet(
             f"color: {constants.TEXT_PRI}; font-size: 12px; background: transparent;"
         )
         vl.addWidget(note_lbl)
-
-        self._note_edit = QLineEdit()
-        self._note_edit.setPlaceholderText("Brief description of this template")
-        self._note_edit.setFixedHeight(32)
-        self._note_edit.setStyleSheet(self._name_edit.styleSheet())
         vl.addWidget(self._note_edit)
 
-        # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         btn_row.addStretch()
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setFixedHeight(30)
-        cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                color: {constants.TEXT_SEC};
-                border: none; border-radius: 4px; padding: 2px 14px;
-            }}
-            QPushButton:hover {{
-                background-color: {constants.SPLITTER_COLOR};
-                color: {constants.TEXT_PRI};
-            }}
-        """)
-        cancel_btn.clicked.connect(self.reject)
-        btn_row.addWidget(cancel_btn)
-
-        save_btn = QPushButton("Save Template")
-        save_btn.setFixedHeight(30)
-        save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT_HI};
-                color: white; border: none; border-radius: 4px;
-                padding: 2px 14px; font-weight: bold;
-            }}
-            QPushButton:hover {{ background-color: #1a95e8; }}
-        """)
-        save_btn.clicked.connect(self._on_save)
-        btn_row.addWidget(save_btn)
+        btn_row.addWidget(self._cancel_btn)
+        btn_row.addWidget(self._save_btn)
         vl.addLayout(btn_row)
+
+    def create_connections(self):
+        self._cancel_btn.clicked.connect(self.reject)
+        self._save_btn.clicked.connect(self._on_save)
 
     def _on_save(self):
         name = self._name_edit.text().strip()
@@ -756,17 +756,59 @@ class TemplateManagerDialog(QDialog):
             Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowMaximizeButtonHint
         )
         self.setStyleSheet(f"background-color: {constants.BORDER};")
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
         self._load_templates()
 
     # ------------------------------------------------------------------ #
 
-    def _build_ui(self):
+    def create_widgets(self):
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        self._scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+        )
+
+        self._tmpl_container = QWidget()
+        self._tmpl_container.setStyleSheet("background: transparent;")
+        self._tmpl_layout = QVBoxLayout(self._tmpl_container)
+        self._tmpl_layout.setContentsMargins(0, 0, 0, 0)
+        self._tmpl_layout.setSpacing(6)
+        self._tmpl_layout.addStretch()
+        self._scroll.setWidget(self._tmpl_container)
+
+        self._empty_lbl = QLabel(
+            "No templates saved yet.\n"
+            "Use the  ★  button on any session to save it as a template."
+        )
+        self._empty_lbl.setAlignment(Qt.AlignCenter)
+        self._empty_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 12px; background: transparent;"
+        )
+        self._empty_lbl.setVisible(False)
+
+        self._close_btn = QPushButton("Close")
+        self._close_btn.setFixedHeight(32)
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_SEC};
+                border: none; border-radius: 4px; padding: 4px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_PRI};
+            }}
+        """)
+
+    def create_layout(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(22, 20, 22, 20)
         outer.setSpacing(10)
 
-        # Title row
         title_row = QHBoxLayout()
         title_lbl = QLabel("Session Templates")
         title_lbl.setStyleSheet(
@@ -788,57 +830,17 @@ class TemplateManagerDialog(QDialog):
         )
         outer.addWidget(hint)
 
-        # Template list scroll area
-        self._scroll = QScrollArea()
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setFrameShape(QFrame.NoFrame)
-        self._scroll.setStyleSheet(
-            "QScrollArea { background: transparent; border: none; }"
-        )
-
-        self._tmpl_container = QWidget()
-        self._tmpl_container.setStyleSheet("background: transparent;")
-        self._tmpl_layout = QVBoxLayout(self._tmpl_container)
-        self._tmpl_layout.setContentsMargins(0, 0, 0, 0)
-        self._tmpl_layout.setSpacing(6)
-        self._tmpl_layout.addStretch()
-
-        self._scroll.setWidget(self._tmpl_container)
         outer.addWidget(self._scroll, stretch=1)
-
-        self._empty_lbl = QLabel(
-            "No templates saved yet.\n"
-            "Use the  ★  button on any session to save it as a template."
-        )
-        self._empty_lbl.setAlignment(Qt.AlignCenter)
-        self._empty_lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; font-size: 12px; background: transparent;"
-        )
-        self._empty_lbl.setVisible(False)
         outer.addWidget(self._empty_lbl, stretch=1)
 
-        # Footer
         footer = QHBoxLayout()
         footer.setSpacing(8)
         footer.addStretch()
-
-        close_btn = QPushButton("Close")
-        close_btn.setFixedHeight(32)
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                color: {constants.TEXT_SEC};
-                border: none; border-radius: 4px; padding: 4px 16px;
-            }}
-            QPushButton:hover {{
-                background-color: {constants.SPLITTER_COLOR};
-                color: {constants.TEXT_PRI};
-            }}
-        """)
-        close_btn.clicked.connect(self.accept)
-        footer.addWidget(close_btn)
+        footer.addWidget(self._close_btn)
         outer.addLayout(footer)
+
+    def create_connections(self):
+        self._close_btn.clicked.connect(self.accept)
 
     def _load_templates(self):
         while self._tmpl_layout.count() > 1:

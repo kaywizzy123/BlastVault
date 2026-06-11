@@ -144,12 +144,22 @@ class ThumbnailPreviewPopup(QWidget):
             "border: 1px solid #444444;"
             "border-radius: 6px;"
         )
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
+
+    def create_widgets(self):
         self._label = QLabel(self)
         self._label.setAlignment(Qt.AlignCenter)
         self._label.setStyleSheet("border: none;")
+
+    def create_layout(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self._label)
+
+    def create_connections(self):
+        pass
 
     def show_at(self, pixmap: QPixmap, cursor_pos: QPoint):
         if pixmap.isNull():
@@ -195,6 +205,7 @@ class VersionCard(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setCursor(Qt.PointingHandCursor)
         self._path = str(p)
+        self._p = p
         self.setFixedSize(self.CARD_W, self.CARD_H)
         self._normal_style = (
             f"QWidget {{ background:{constants.BG}; border-radius:5px;"
@@ -205,16 +216,21 @@ class VersionCard(QWidget):
             f" border:1px solid {constants.ACCENT_HI}; }}"
         )
         self.setStyleSheet(self._normal_style)
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
-        # ── Thumbnail ────────────────────────────────────────────────────
+    def create_widgets(self):
+        pass
+
+    def create_layout(self):
+        p    = self._p
+        meta = read_meta(p)
+
         thumb_lbl = QLabel()
         thumb_lbl.setFixedSize(self.THUMB_W, self.THUMB_H)
         thumb_lbl.setAlignment(Qt.AlignCenter)
         thumb_lbl.setStyleSheet("background:#000; border-radius:3px; border:none;")
-
-        # Read meta once — used by both department and status sections below
-        meta = read_meta(p)
-
         ext = p.suffix.lower()
         if ext in constants.IMAGE_EXTS:
             icon = get_file_icon(str(p), (self.THUMB_W, self.THUMB_H))
@@ -226,7 +242,6 @@ class VersionCard(QWidget):
         if icon:
             thumb_lbl.setPixmap(icon.pixmap(self.THUMB_W, self.THUMB_H))
 
-        # ── Version label ────────────────────────────────────────────────
         _, ver = version_key(p.stem)
         ver_lbl = QLabel(f"v{ver:03d}" if ver is not None else p.stem[-4:])
         ver_lbl.setAlignment(Qt.AlignCenter)
@@ -235,7 +250,6 @@ class VersionCard(QWidget):
             f" background:transparent; border:none;"
         )
 
-        # ── Department ───────────────────────────────────────────────────
         dept = meta.get("department") or detect_department(p.name)
         dept_lbl = QLabel(dept if dept else "—")
         dept_lbl.setAlignment(Qt.AlignCenter)
@@ -244,7 +258,6 @@ class VersionCard(QWidget):
             f" background:transparent; border:none;"
         )
 
-        # ── Date ─────────────────────────────────────────────────────────
         try:
             ctime    = constants.file_ctime(p)
             date_str = datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d")
@@ -257,14 +270,11 @@ class VersionCard(QWidget):
             f" background:transparent; border:none;"
         )
 
-        # ── Status dot + label ───────────────────────────────────────────
-        status     = meta.get("status", "")
-        dot_color  = constants.STATUS_COLORS.get(status, constants.SPLITTER_COLOR)
-        dot        = QLabel()
+        status    = meta.get("status", "")
+        dot_color = constants.STATUS_COLORS.get(status, constants.SPLITTER_COLOR)
+        dot = QLabel()
         dot.setFixedSize(7, 7)
-        dot.setStyleSheet(
-            f"background:{dot_color}; border-radius:3px; border:none;"
-        )
+        dot.setStyleSheet(f"background:{dot_color}; border-radius:3px; border:none;")
         status_lbl = QLabel(status if status else "—")
         status_lbl.setStyleSheet(
             f"color:{constants.TEXT_SEC}; font-size:9px;"
@@ -286,6 +296,9 @@ class VersionCard(QWidget):
         layout.addWidget(dept_lbl)
         layout.addWidget(date_lbl)
         layout.addLayout(s_row)
+
+    def create_connections(self):
+        pass
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -313,15 +326,17 @@ class VersionHistoryPopup(QWidget):
             f"border:1px solid {constants.SPLITTER_COLOR};"
             f"border-radius:8px;"
         )
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
-        # Title bar
+    def create_widgets(self):
         self._title_lbl = QLabel()
         self._title_lbl.setStyleSheet(
             f"color:{constants.TEXT_SEC}; font-size:10px;"
             f" background:transparent; border:none; padding:0 4px;"
         )
 
-        # Scroll area with horizontal strip of cards
         self._scroll = QScrollArea()
         self._scroll.setFrameShape(QFrame.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -336,11 +351,15 @@ class VersionHistoryPopup(QWidget):
         self._strip_layout.setSpacing(6)
         self._scroll.setWidget(self._strip)
 
+    def create_layout(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(6, 6, 6, 6)
         outer.setSpacing(4)
         outer.addWidget(self._title_lbl)
         outer.addWidget(self._scroll)
+
+    def create_connections(self):
+        pass
 
     def show_versions(self, asset_name: str, paths: list, global_pos: QPoint):
         """Populate cards and show the popup centred above *global_pos*."""

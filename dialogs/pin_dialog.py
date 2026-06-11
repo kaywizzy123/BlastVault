@@ -29,12 +29,29 @@ class NoPinDialog(QDialog):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
+    def create_widgets(self):
+        self._ok_btn = QPushButton("OK")
+        self._ok_btn.setFixedHeight(32)
+        self._ok_btn.setMinimumWidth(90)
+        self._ok_btn.setCursor(Qt.PointingHandCursor)
+        self._ok_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white; border: none; border-radius: 4px;
+                padding: 4px 20px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: #1a95e8; }}
+        """)
+
+    def create_layout(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(28, 24, 28, 24)
         outer.setSpacing(0)
 
-        # ── Icon ─────────────────────────────────────────────────────────
         icon_lbl = QLabel()
         pix = QPixmap(str(constants.ICONS_DIR / "lock.png"))
         if not pix.isNull():
@@ -46,56 +63,33 @@ class NoPinDialog(QDialog):
         outer.addWidget(icon_lbl)
         outer.addSpacing(10)
 
-        # ── Title ─────────────────────────────────────────────────────────
         title_lbl = QLabel("No Admin PIN Set")
         title_lbl.setAlignment(Qt.AlignCenter)
         title_lbl.setStyleSheet(f"""
-            font-size: 16px;
-            font-weight: bold;
-            color: {constants.TEXT_PRI};
-            background: transparent;
+            font-size: 16px; font-weight: bold;
+            color: {constants.TEXT_PRI}; background: transparent;
         """)
         outer.addWidget(title_lbl)
         outer.addSpacing(8)
 
-        # ── Message ───────────────────────────────────────────────────────
         msg_lbl = QLabel("An admin PIN hasn't been configured yet.\nAsk your admin to set one in Settings.")
         msg_lbl.setAlignment(Qt.AlignCenter)
         msg_lbl.setWordWrap(True)
         msg_lbl.setStyleSheet(f"""
-            font-size: 12px;
-            color: {constants.TEXT_SEC};
-            background: transparent;
-            padding: 0px 4px;
+            font-size: 12px; color: {constants.TEXT_SEC};
+            background: transparent; padding: 0px 4px;
         """)
         outer.addWidget(msg_lbl)
         outer.addSpacing(22)
 
-        # ── OK button ─────────────────────────────────────────────────────
-        ok_btn = QPushButton("OK")
-        ok_btn.setFixedHeight(32)
-        ok_btn.setMinimumWidth(90)
-        ok_btn.setCursor(Qt.PointingHandCursor)
-        ok_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT_HI};
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 20px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #1a95e8;
-            }}
-        """)
-        ok_btn.clicked.connect(self.accept)
-
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(self._ok_btn)
         btn_row.addStretch()
         outer.addLayout(btn_row)
+
+    def create_connections(self):
+        self._ok_btn.clicked.connect(self.accept)
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -109,18 +103,58 @@ class _PinBase(QDialog):
 
     def __init__(self, title: str, subtitle: str, parent=None):
         super().__init__(parent)
+        self._title    = title
+        self._subtitle = subtitle
         self.setWindowTitle(title)
         self.setFixedWidth(380)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
         self._accepted_pin = ""
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
+    def create_widgets(self):
+        self._error_lbl = QLabel()
+        self._error_lbl.setAlignment(Qt.AlignCenter)
+        self._error_lbl.setWordWrap(True)
+        self._error_lbl.setFixedHeight(18)
+        self._error_lbl.setStyleSheet(f"""
+            color: {constants.FAIL}; background: transparent; font-size: 11px;
+        """)
+        self._error_lbl.setVisible(False)
+
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setFixedHeight(32)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_SEC}; border: none; border-radius: 4px; padding: 4px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.SPLITTER_COLOR}; color: {constants.TEXT_PRI};
+            }}
+        """)
+
+        self._confirm_btn = QPushButton("Confirm")
+        self._confirm_btn.setFixedHeight(32)
+        self._confirm_btn.setCursor(Qt.PointingHandCursor)
+        self._confirm_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white; border: none; border-radius: 4px;
+                padding: 4px 20px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: #1a95e8; }}
+        """)
+
+    def create_layout(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(28, 24, 28, 24)
         outer.setSpacing(0)
 
-        # ── Icon ─────────────────────────────────────────────────────────
         icon_lbl = QLabel()
         pix = QPixmap(str(constants.ICONS_DIR / self._ICON))
         if not pix.isNull():
@@ -132,95 +166,43 @@ class _PinBase(QDialog):
         outer.addWidget(icon_lbl)
         outer.addSpacing(10)
 
-        # ── Title ─────────────────────────────────────────────────────────
-        title_lbl = QLabel(title)
+        title_lbl = QLabel(self._title)
         title_lbl.setAlignment(Qt.AlignCenter)
         title_lbl.setStyleSheet(f"""
-            font-size: 16px;
-            font-weight: bold;
-            color: {constants.TEXT_PRI};
-            background: transparent;
+            font-size: 16px; font-weight: bold;
+            color: {constants.TEXT_PRI}; background: transparent;
         """)
         outer.addWidget(title_lbl)
         outer.addSpacing(6)
 
-        # ── Subtitle ─────────────────────────────────────────────────────
-        sub_lbl = QLabel(subtitle)
+        sub_lbl = QLabel(self._subtitle)
         sub_lbl.setAlignment(Qt.AlignCenter)
         sub_lbl.setWordWrap(True)
         sub_lbl.setStyleSheet(f"""
-            font-size: 11px;
-            color: {constants.TEXT_SEC};
-            background: transparent;
-            padding: 0px 4px;
+            font-size: 11px; color: {constants.TEXT_SEC};
+            background: transparent; padding: 0px 4px;
         """)
         outer.addWidget(sub_lbl)
         outer.addSpacing(18)
 
-        # ── Fields (subclass fills this in) ──────────────────────────────
         self._fields_layout = QVBoxLayout()
         self._fields_layout.setSpacing(6)
         outer.addLayout(self._fields_layout)
 
-        # ── Error label ───────────────────────────────────────────────────
-        self._error_lbl = QLabel()
-        self._error_lbl.setAlignment(Qt.AlignCenter)
-        self._error_lbl.setWordWrap(True)
-        self._error_lbl.setFixedHeight(18)
-        self._error_lbl.setStyleSheet(f"""
-            color: {constants.FAIL};
-            background: transparent;
-            font-size: 11px;
-        """)
-        self._error_lbl.setVisible(False)
         outer.addSpacing(6)
         outer.addWidget(self._error_lbl)
         outer.addSpacing(14)
 
-        # ── Buttons ───────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-
-        self._cancel_btn = QPushButton("Cancel")
-        self._cancel_btn.setFixedHeight(32)
-        self._cancel_btn.setCursor(Qt.PointingHandCursor)
-        self._cancel_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                color: {constants.TEXT_SEC};
-                border: none;
-                border-radius: 4px;
-                padding: 4px 16px;
-            }}
-            QPushButton:hover {{
-                background-color: {constants.SPLITTER_COLOR};
-                color: {constants.TEXT_PRI};
-            }}
-        """)
-        self._cancel_btn.clicked.connect(self.reject)
-
-        self._confirm_btn = QPushButton("Confirm")
-        self._confirm_btn.setFixedHeight(32)
-        self._confirm_btn.setCursor(Qt.PointingHandCursor)
-        self._confirm_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT_HI};
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 20px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #1a95e8;
-            }}
-        """)
-        self._confirm_btn.clicked.connect(self._on_confirm)
-
         btn_row.addWidget(self._cancel_btn)
         btn_row.addStretch()
         btn_row.addWidget(self._confirm_btn)
         outer.addLayout(btn_row)
+
+    def create_connections(self):
+        self._cancel_btn.clicked.connect(self.reject)
+        self._confirm_btn.clicked.connect(self._on_confirm)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -251,14 +233,10 @@ class _PinBase(QDialog):
                 background-color: {constants.BG};
                 color: {constants.TEXT_PRI};
                 border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px;
-                padding: 4px 10px;
-                font-size: 13px;
-                letter-spacing: 2px;
+                border-radius: 4px; padding: 4px 10px;
+                font-size: 13px; letter-spacing: 2px;
             }}
-            QLineEdit:focus {{
-                border: 1px solid {constants.ACCENT_HI};
-            }}
+            QLineEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
         """)
         return field
 
@@ -290,14 +268,22 @@ class PinInputDialog(_PinBase):
         verify_fn=None,
         parent=None,
     ):
-        super().__init__(title, subtitle, parent)
         self._verify_fn = verify_fn
-        self._confirm_btn.setText("Unlock")
+        super().__init__(title, subtitle, parent)
 
-        self._fields_layout.addWidget(self._make_field_label("PIN"))
+    def create_widgets(self):
+        super().create_widgets()
+        self._confirm_btn.setText("Unlock")
         self._pin_field = self._make_pin_field("Enter PIN…")
-        self._pin_field.returnPressed.connect(self._on_confirm)
+
+    def create_layout(self):
+        super().create_layout()
+        self._fields_layout.addWidget(self._make_field_label("PIN"))
         self._fields_layout.addWidget(self._pin_field)
+
+    def create_connections(self):
+        super().create_connections()
+        self._pin_field.returnPressed.connect(self._on_confirm)
 
     def _on_confirm(self):
         pin = self._pin_field.text()
@@ -327,20 +313,25 @@ class PinSetupDialog(_PinBase):
             "Create a PIN to enable status editing.",
             parent,
         )
-        self._confirm_btn.setText("Set PIN")
 
-        # Build both fields before connecting signals
+    def create_widgets(self):
+        super().create_widgets()
+        self._confirm_btn.setText("Set PIN")
         self._pin_field     = self._make_pin_field("New PIN…")
         self._confirm_field = self._make_pin_field("Confirm PIN…")
 
-        self._pin_field.returnPressed.connect(self._confirm_field.setFocus)
-        self._confirm_field.returnPressed.connect(self._on_confirm)
-
+    def create_layout(self):
+        super().create_layout()
         self._fields_layout.addWidget(self._make_field_label("New PIN"))
         self._fields_layout.addWidget(self._pin_field)
         self._fields_layout.addSpacing(6)
         self._fields_layout.addWidget(self._make_field_label("Confirm PIN"))
         self._fields_layout.addWidget(self._confirm_field)
+
+    def create_connections(self):
+        super().create_connections()
+        self._pin_field.returnPressed.connect(self._confirm_field.setFocus)
+        self._confirm_field.returnPressed.connect(self._on_confirm)
 
     def _on_confirm(self):
         pin     = self._pin_field.text()

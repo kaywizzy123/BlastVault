@@ -37,15 +37,107 @@ class SubmitReviewDialog(QDialog):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
-
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
         self._load_sessions()
 
     # ------------------------------------------------------------------ #
-    #  UI                                                                  #
+    #  Widget / layout / connection construction                           #
     # ------------------------------------------------------------------ #
 
-    def _build_ui(self):
+    def create_widgets(self):
+        _combo_style = f"""
+            QComboBox {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 13px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {constants.BORDER};
+                color: {constants.TEXT_PRI};
+                selection-background-color: {constants.ACCENT};
+            }}
+            QComboBox::drop-down {{ border: none; width: 20px; }}
+        """
+
+        self._session_combo = QComboBox()
+        self._session_combo.setFixedHeight(34)
+        self._session_combo.setStyleSheet(_combo_style)
+
+        self._new_session_btn = QPushButton("+ New")
+        self._new_session_btn.setFixedHeight(34)
+        self._new_session_btn.setCursor(Qt.PointingHandCursor)
+        self._new_session_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_PRI};
+                border: none; border-radius: 4px; padding: 4px 12px;
+            }}
+            QPushButton:hover {{ background-color: {constants.ACCENT_HI}; color: white; }}
+        """)
+
+        self._no_sessions_lbl = QLabel("No open sessions.  Click  + New  to create one.")
+        self._no_sessions_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px;"
+            f"background: transparent; padding: 2px 0px;"
+        )
+        self._no_sessions_lbl.setVisible(False)
+
+        self._priority_combo = QComboBox()
+        self._priority_combo.setFixedHeight(32)
+        for label in ("Normal", "High", "Urgent ⚡"):
+            self._priority_combo.addItem(label)
+        self._priority_combo.setStyleSheet(_combo_style)
+
+        self._note_field = QTextEdit()
+        self._note_field.setPlaceholderText("e.g.  First pass on the foot contacts")
+        self._note_field.setFixedHeight(64)
+        self._note_field.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {constants.BG};
+                color: {constants.TEXT_PRI};
+                border: 1px solid {constants.SPLITTER_COLOR};
+                border-radius: 4px; padding: 6px; font-size: 12px;
+            }}
+            QTextEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
+        """)
+
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setFixedHeight(32)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_SEC};
+                border: none; border-radius: 4px; padding: 4px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_PRI};
+            }}
+        """)
+
+        self._submit_btn = QPushButton("Submit  →")
+        self._submit_btn.setFixedHeight(32)
+        self._submit_btn.setCursor(Qt.PointingHandCursor)
+        self._submit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white; border: none; border-radius: 4px;
+                padding: 4px 20px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: #1a95e8; }}
+            QPushButton:disabled {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_SEC};
+            }}
+        """)
+
+    def create_layout(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 20, 24, 20)
         outer.setSpacing(10)
@@ -72,15 +164,12 @@ class SubmitReviewDialog(QDialog):
 
         # ── File list ─────────────────────────────────────────────────────
         n = len(self._file_paths)
-        files_lbl = QLabel(
-            f"Submitting {n} shot{'s' if n != 1 else ''}:"
-        )
+        files_lbl = QLabel(f"Submitting {n} shot{'s' if n != 1 else ''}:")
         files_lbl.setStyleSheet(
             f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
         )
         outer.addWidget(files_lbl)
 
-        # Scrollable compact file list (capped at 4 visible rows)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -104,14 +193,13 @@ class SubmitReviewDialog(QDialog):
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
-        # ── Separator ────────────────────────────────────────────────────
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
         outer.addWidget(sep)
 
-        # ── Review Session picker ─────────────────────────────────────────
+        # ── Session picker ────────────────────────────────────────────────
         session_lbl = QLabel("Review Session")
         session_lbl.setStyleSheet(
             f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
@@ -120,53 +208,9 @@ class SubmitReviewDialog(QDialog):
 
         session_row = QHBoxLayout()
         session_row.setSpacing(8)
-
-        self._session_combo = QComboBox()
-        self._session_combo.setFixedHeight(34)
-        self._session_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: {constants.BG};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px;
-                padding: 2px 8px;
-                font-size: 13px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: {constants.BORDER};
-                color: {constants.TEXT_PRI};
-                selection-background-color: {constants.ACCENT};
-            }}
-            QComboBox::drop-down {{ border: none; width: 20px; }}
-        """)
         session_row.addWidget(self._session_combo, stretch=1)
-
-        # "+ New" — always visible; lock verified on click so any admin can create a session
-        self._new_session_btn = QPushButton("+ New")
-        self._new_session_btn.setFixedHeight(34)
-        self._new_session_btn.setCursor(Qt.PointingHandCursor)
-        self._new_session_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                color: {constants.TEXT_PRI};
-                border: none; border-radius: 4px; padding: 4px 12px;
-            }}
-            QPushButton:hover {{ background-color: {constants.ACCENT_HI}; color: white; }}
-        """)
-        self._new_session_btn.clicked.connect(self._on_new_session)
         session_row.addWidget(self._new_session_btn)
-
         outer.addLayout(session_row)
-
-        # Placeholder shown when no sessions exist
-        self._no_sessions_lbl = QLabel(
-            "No open sessions.  Click  + New  to create one."
-        )
-        self._no_sessions_lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; font-size: 11px;"
-            f"background: transparent; padding: 2px 0px;"
-        )
-        self._no_sessions_lbl.setVisible(False)
         outer.addWidget(self._no_sessions_lbl)
 
         # ── Priority ──────────────────────────────────────────────────────
@@ -175,26 +219,6 @@ class SubmitReviewDialog(QDialog):
             f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
         )
         outer.addWidget(priority_lbl)
-
-        self._priority_combo = QComboBox()
-        self._priority_combo.setFixedHeight(32)
-        _PRIORITY_ITEMS = [("Normal", "normal"), ("High", "high"), ("Urgent ⚡", "urgent")]
-        for label, _ in _PRIORITY_ITEMS:
-            self._priority_combo.addItem(label)
-        self._priority_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: {constants.BG};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px; padding: 2px 8px; font-size: 13px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: {constants.BORDER};
-                color: {constants.TEXT_PRI};
-                selection-background-color: {constants.ACCENT};
-            }}
-            QComboBox::drop-down {{ border: none; width: 20px; }}
-        """)
         outer.addWidget(self._priority_combo)
 
         # ── Note (optional) ───────────────────────────────────────────────
@@ -203,62 +227,19 @@ class SubmitReviewDialog(QDialog):
             f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
         )
         outer.addWidget(note_lbl)
-
-        self._note_field = QTextEdit()
-        self._note_field.setPlaceholderText("e.g.  First pass on the foot contacts")
-        self._note_field.setFixedHeight(64)
-        self._note_field.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {constants.BG};
-                color: {constants.TEXT_PRI};
-                border: 1px solid {constants.SPLITTER_COLOR};
-                border-radius: 4px; padding: 6px; font-size: 12px;
-            }}
-            QTextEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
-        """)
         outer.addWidget(self._note_field)
 
-        # ── Buttons ───────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setFixedHeight(32)
-        cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                color: {constants.TEXT_SEC};
-                border: none; border-radius: 4px; padding: 4px 16px;
-            }}
-            QPushButton:hover {{
-                background-color: {constants.SPLITTER_COLOR};
-                color: {constants.TEXT_PRI};
-            }}
-        """)
-        cancel_btn.clicked.connect(self.reject)
-
-        self._submit_btn = QPushButton("Submit  →")
-        self._submit_btn.setFixedHeight(32)
-        self._submit_btn.setCursor(Qt.PointingHandCursor)
-        self._submit_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT_HI};
-                color: white; border: none; border-radius: 4px;
-                padding: 4px 20px; font-weight: bold;
-            }}
-            QPushButton:hover {{ background-color: #1a95e8; }}
-            QPushButton:disabled {{
-                background-color: {constants.SPLITTER_COLOR};
-                color: {constants.TEXT_SEC};
-            }}
-        """)
-        self._submit_btn.clicked.connect(self._on_submit)
-
-        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(self._cancel_btn)
         btn_row.addStretch()
         btn_row.addWidget(self._submit_btn)
         outer.addLayout(btn_row)
+
+    def create_connections(self):
+        self._new_session_btn.clicked.connect(self._on_new_session)
+        self._cancel_btn.clicked.connect(self.reject)
+        self._submit_btn.clicked.connect(self._on_submit)
 
     # ------------------------------------------------------------------ #
     #  Session loading                                                     #
@@ -388,11 +369,12 @@ class _PickSessionTypeDialog(QDialog):
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
         self.selected_type = ""
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
+        self._update_preview()
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 16, 20, 16)
-        outer.setSpacing(10)
-
+    def create_widgets(self):
         _combo_style = f"""
             QComboBox, QLineEdit {{
                 background-color: {constants.BG};
@@ -413,13 +395,6 @@ class _PickSessionTypeDialog(QDialog):
             }}
         """
 
-        # ── Session type ──────────────────────────────────────────────────
-        type_lbl = QLabel("Session Type  <i>(pick from list or type a custom name)</i>")
-        type_lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
-        )
-        outer.addWidget(type_lbl)
-
         self._combo = QComboBox()
         self._combo.setEditable(True)
         self._combo.setInsertPolicy(QComboBox.NoInsert)
@@ -431,43 +406,22 @@ class _PickSessionTypeDialog(QDialog):
         else:
             self._combo.setCurrentText("")
         self._combo.lineEdit().setPlaceholderText("e.g. Director Dailies")
-        outer.addWidget(self._combo)
-
-        # ── Label (optional) ──────────────────────────────────────────────
-        label_lbl = QLabel(
-            "Label  <i>(optional — use for AM / PM / Round 2, etc.)</i>"
-        )
-        label_lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
-        )
-        outer.addWidget(label_lbl)
 
         self._label_edit = QLineEdit()
         self._label_edit.setPlaceholderText("e.g.  AM  or  PM  or  Round 2")
         self._label_edit.setFixedHeight(34)
         self._label_edit.setStyleSheet(_combo_style)
-        outer.addWidget(self._label_edit)
 
-        # ── Preview ───────────────────────────────────────────────────────
         self._preview_lbl = QLabel("")
         self._preview_lbl.setStyleSheet(
             f"color: {constants.ACCENT_HI}; font-size: 11px;"
             f"font-style: italic; background: transparent;"
         )
-        outer.addWidget(self._preview_lbl)
 
-        self._combo.currentTextChanged.connect(self._update_preview)
-        self._label_edit.textChanged.connect(self._update_preview)
-        self._update_preview()
-
-        # ── Buttons ───────────────────────────────────────────────────────
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setFixedHeight(30)
-        cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setStyleSheet(f"""
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setFixedHeight(30)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {constants.ACCENT};
                 color: {constants.TEXT_SEC};
@@ -478,12 +432,11 @@ class _PickSessionTypeDialog(QDialog):
                 color: {constants.TEXT_PRI};
             }}
         """)
-        cancel_btn.clicked.connect(self.reject)
 
-        create_btn = QPushButton("Create")
-        create_btn.setFixedHeight(30)
-        create_btn.setCursor(Qt.PointingHandCursor)
-        create_btn.setStyleSheet(f"""
+        self._create_btn = QPushButton("Create")
+        self._create_btn.setFixedHeight(30)
+        self._create_btn.setCursor(Qt.PointingHandCursor)
+        self._create_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {constants.ACCENT_HI};
                 color: white; border: none; border-radius: 4px;
@@ -491,12 +444,39 @@ class _PickSessionTypeDialog(QDialog):
             }}
             QPushButton:hover {{ background-color: #1a95e8; }}
         """)
-        create_btn.clicked.connect(self._on_create)
 
-        btn_row.addWidget(cancel_btn)
+    def create_layout(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 16, 20, 16)
+        outer.setSpacing(10)
+
+        type_lbl = QLabel("Session Type  <i>(pick from list or type a custom name)</i>")
+        type_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
+        )
+        outer.addWidget(type_lbl)
+        outer.addWidget(self._combo)
+
+        label_lbl = QLabel("Label  <i>(optional — use for AM / PM / Round 2, etc.)</i>")
+        label_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
+        )
+        outer.addWidget(label_lbl)
+        outer.addWidget(self._label_edit)
+        outer.addWidget(self._preview_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.addWidget(self._cancel_btn)
         btn_row.addStretch()
-        btn_row.addWidget(create_btn)
+        btn_row.addWidget(self._create_btn)
         outer.addLayout(btn_row)
+
+    def create_connections(self):
+        self._combo.currentTextChanged.connect(self._update_preview)
+        self._label_edit.textChanged.connect(self._update_preview)
+        self._cancel_btn.clicked.connect(self.reject)
+        self._create_btn.clicked.connect(self._on_create)
 
     def _update_preview(self):
         stype = self._combo.currentText().strip()

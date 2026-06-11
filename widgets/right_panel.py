@@ -142,6 +142,7 @@ class RightPanel(QWidget):
         self._probe_worker = None   # background ffprobe thread
         self.create_widgets()
         self.create_layout()
+        self.create_connections()
 
     # ------------------------------------------------------------------ #
     #  Widget / layout construction                                        #
@@ -187,8 +188,6 @@ class RightPanel(QWidget):
             }}
             QComboBox::drop-down {{ border: none; width: 18px; }}
         """)
-        self.status_combo.currentTextChanged.connect(self._on_status_changed)
-
         # Container widget that holds badge + combo in one row
         self._status_row_widget = QWidget()
         self._status_row_widget.setStyleSheet("background: transparent;")
@@ -309,8 +308,6 @@ class RightPanel(QWidget):
                 border: 1px solid {constants.ACCENT_HI};
             }}
         """)
-        self.notes_btn.clicked.connect(self._on_notes_clicked)
-
         # ── Content container (hidden until a file is selected) ──────────
         self.content_widget = QWidget()
         content_layout = QVBoxLayout(self.content_widget)
@@ -344,6 +341,10 @@ class RightPanel(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         self.main_layout.addWidget(self._content_scroll)
+
+    def create_connections(self):
+        self.status_combo.currentTextChanged.connect(self._on_status_changed)
+        self.notes_btn.clicked.connect(self._on_notes_clicked)
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #

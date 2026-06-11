@@ -69,50 +69,35 @@ class ReviewSessionDialog(QDialog):
         )
         self.setStyleSheet(f"background-color: {constants.BORDER};")
 
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
         self._load_session()
 
     # ------------------------------------------------------------------ #
     #  UI scaffold                                                         #
     # ------------------------------------------------------------------ #
 
-    def _build_ui(self):
-        self._outer = QVBoxLayout(self)
-        self._outer.setContentsMargins(24, 20, 24, 20)
-        self._outer.setSpacing(12)
-
-        # Header (filled in _load_session) — fixed height, never scrolls away
+    def create_widgets(self):
         self._header_widget = QWidget()
         self._header_widget.setStyleSheet("background: transparent;")
         self._header_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         self._header_layout = QVBoxLayout(self._header_widget)
         self._header_layout.setContentsMargins(0, 0, 0, 0)
         self._header_layout.setSpacing(4)
-        self._outer.addWidget(self._header_widget)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
-        self._outer.addWidget(sep)
-
-        # ── Batch toolbar (hidden until batch mode is on) ─────────────────
         self._batch_bar = QWidget()
         self._batch_bar.setStyleSheet(
             f"background-color: {constants.BG}; border-radius: 4px;"
         )
         self._batch_bar.setVisible(False)
-        bb = QHBoxLayout(self._batch_bar)
-        bb.setContentsMargins(10, 6, 10, 6)
-        bb.setSpacing(8)
 
         self._sel_lbl = QLabel("0 selected")
         self._sel_lbl.setStyleSheet(
             f"color: {constants.TEXT_SEC}; font-size: 11px; background: transparent;"
         )
-        bb.addWidget(self._sel_lbl)
-        bb.addStretch()
 
+        self._batch_btns: dict[str, QPushButton] = {}
         for label, color, rs in [
             ("Approve All",  constants.SUCCESS, "Approved"),
             ("Revision All", "#e5a820",         "Revision"),
@@ -133,18 +118,14 @@ class ReviewSessionDialog(QDialog):
                     border-color: {color};
                 }}
             """)
-            btn.clicked.connect(lambda *_, _rs=rs: self._on_batch_review(_rs))
-            bb.addWidget(btn)
+            self._batch_btns[rs] = btn
 
-        self._outer.addWidget(self._batch_bar)
-
-        # Shot card list
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._scroll.setStyleSheet(
-            f"QScrollArea {{ background: transparent; border: none; }}"
+            "QScrollArea { background: transparent; border: none; }"
         )
         self._cards_container = QWidget()
         self._cards_container.setStyleSheet("background: transparent;")
@@ -153,21 +134,46 @@ class ReviewSessionDialog(QDialog):
         self._cards_layout.setSpacing(8)
         self._cards_layout.addStretch()
         self._scroll.setWidget(self._cards_container)
-        self._outer.addWidget(self._scroll, stretch=1)
 
-        # Empty state
         self._empty_lbl = QLabel("No shots in this session yet.")
         self._empty_lbl.setAlignment(Qt.AlignCenter)
         self._empty_lbl.setStyleSheet(
             f"color: {constants.TEXT_SEC}; font-size: 12px; background: transparent;"
         )
         self._empty_lbl.setVisible(False)
+
+    def create_layout(self):
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(24, 20, 24, 20)
+        self._outer.setSpacing(12)
+
+        self._outer.addWidget(self._header_widget)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
+        self._outer.addWidget(sep)
+
+        bb = QHBoxLayout(self._batch_bar)
+        bb.setContentsMargins(10, 6, 10, 6)
+        bb.setSpacing(8)
+        bb.addWidget(self._sel_lbl)
+        bb.addStretch()
+        for btn in self._batch_btns.values():
+            bb.addWidget(btn)
+        self._outer.addWidget(self._batch_bar)
+
+        self._outer.addWidget(self._scroll, stretch=1)
         self._outer.addWidget(self._empty_lbl, stretch=1)
 
-        # Footer
         self._footer_layout = QHBoxLayout()
         self._footer_layout.setSpacing(8)
         self._outer.addLayout(self._footer_layout)
+
+    def create_connections(self):
+        for rs, btn in self._batch_btns.items():
+            btn.clicked.connect(lambda *_, _rs=rs: self._on_batch_review(_rs))
 
     # ------------------------------------------------------------------ #
     #  Session loading                                                     #

@@ -73,13 +73,46 @@ class CompareDialog(QDialog):
             Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowMaximizeButtonHint
         )
         self.setStyleSheet(f"background-color: {constants.BORDER};")
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
     # ------------------------------------------------------------------ #
-    #  UI                                                                  #
+    #  Widget / layout / connection construction                           #
     # ------------------------------------------------------------------ #
 
-    def _build_ui(self):
+    def create_widgets(self):
+        self._play_both_btn = QPushButton("  Play Both")
+        self._play_both_btn.setIcon(QIcon(str(constants.ICONS_DIR / "play-button-arrowhead.png")))
+        self._play_both_btn.setIconSize(QSize(14, 14))
+        self._play_both_btn.setFixedHeight(32)
+        self._play_both_btn.setCursor(Qt.PointingHandCursor)
+        self._play_both_btn.setToolTip("Open both versions in player one after the other")
+        self._play_both_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT_HI};
+                color: white; border: none; border-radius: 4px;
+                padding: 4px 18px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: #1a95e8; }}
+        """)
+
+        self._close_btn = QPushButton("Close")
+        self._close_btn.setFixedHeight(32)
+        self._close_btn.setCursor(Qt.PointingHandCursor)
+        self._close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {constants.ACCENT};
+                color: {constants.TEXT_SEC};
+                border: none; border-radius: 4px; padding: 4px 16px;
+            }}
+            QPushButton:hover {{
+                background-color: {constants.SPLITTER_COLOR};
+                color: {constants.TEXT_PRI};
+            }}
+        """)
+
+    def create_layout(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(24, 20, 24, 20)
         outer.setSpacing(14)
@@ -114,7 +147,6 @@ class CompareDialog(QDialog):
         panels_row = QHBoxLayout()
         panels_row.setSpacing(12)
 
-        # Left = older version (B), Right = newer version (A)
         left_panel  = self._build_panel(
             self._path_b, self._ver_b, self._meta_b, is_current=False
         )
@@ -122,9 +154,8 @@ class CompareDialog(QDialog):
             self._path_a, self._ver_a, self._meta_a, is_current=True
         )
 
-        panels_row.addWidget(left_panel,  stretch=1)
+        panels_row.addWidget(left_panel, stretch=1)
 
-        # Centre divider arrow
         arrow_lbl = QLabel()
         arrow_pix = QPixmap(str(constants.ICONS_DIR / "right-arrow.png"))
         if not arrow_pix.isNull():
@@ -139,45 +170,16 @@ class CompareDialog(QDialog):
         panels_row.addWidget(right_panel, stretch=1)
         outer.addLayout(panels_row, stretch=1)
 
-        # ── Play Both row ─────────────────────────────────────────────────
-        play_both_btn = QPushButton("  Play Both")
-        play_both_btn.setIcon(QIcon(str(constants.ICONS_DIR / "play-button-arrowhead.png")))
-        play_both_btn.setIconSize(QSize(14, 14))
-        play_both_btn.setFixedHeight(32)
-        play_both_btn.setCursor(Qt.PointingHandCursor)
-        play_both_btn.setToolTip("Open both versions in player one after the other")
-        play_both_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT_HI};
-                color: white; border: none; border-radius: 4px;
-                padding: 4px 18px; font-weight: bold;
-            }}
-            QPushButton:hover {{ background-color: #1a95e8; }}
-        """)
-        play_both_btn.clicked.connect(self._play_both)
-
-        close_btn = QPushButton("Close")
-        close_btn.setFixedHeight(32)
-        close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {constants.ACCENT};
-                color: {constants.TEXT_SEC};
-                border: none; border-radius: 4px; padding: 4px 16px;
-            }}
-            QPushButton:hover {{
-                background-color: {constants.SPLITTER_COLOR};
-                color: {constants.TEXT_PRI};
-            }}
-        """)
-        close_btn.clicked.connect(self.accept)
-
         footer = QHBoxLayout()
         footer.setSpacing(8)
         footer.addStretch()
-        footer.addWidget(play_both_btn)
-        footer.addWidget(close_btn)
+        footer.addWidget(self._play_both_btn)
+        footer.addWidget(self._close_btn)
         outer.addLayout(footer)
+
+    def create_connections(self):
+        self._play_both_btn.clicked.connect(self._play_both)
+        self._close_btn.clicked.connect(self.accept)
 
     def _build_panel(
         self,

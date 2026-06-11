@@ -47,37 +47,46 @@ class ImageViewerDialog(QDialog):
 
     def __init__(self, path: str, parent=None):
         super().__init__(parent)
+        self._path = path
         self.setWindowTitle(Path(path).name)
         self.setMinimumSize(640, 480)
         self.resize(1024, 768)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
         self.setStyleSheet("background-color: #111111;")
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
-        pixmap = QPixmap(path)
+    def create_widgets(self):
+        pixmap = QPixmap(self._path)
         if pixmap.isNull():
             pixmap = QPixmap(32, 32)
             pixmap.fill(Qt.black)
 
-        zoom_label = _ZoomLabel(pixmap, self)
-        zoom_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._zoom_label = _ZoomLabel(pixmap, self)
+        self._zoom_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        scroll = QScrollArea()
-        scroll.setWidget(zoom_label)
-        scroll.setAlignment(Qt.AlignCenter)
-        scroll.setStyleSheet("background-color: #111111; border: none;")
+        self._scroll = QScrollArea()
+        self._scroll.setWidget(self._zoom_label)
+        self._scroll.setAlignment(Qt.AlignCenter)
+        self._scroll.setStyleSheet("background-color: #111111; border: none;")
 
-        hint = QLabel("Scroll to zoom  ·  Esc to close")
-        hint.setAlignment(Qt.AlignCenter)
-        hint.setStyleSheet(
+        self._hint = QLabel("Scroll to zoom  ·  Esc to close")
+        self._hint.setAlignment(Qt.AlignCenter)
+        self._hint.setStyleSheet(
             f"color: {constants.TEXT_SEC}; background: transparent;"
             f" font-size: 11px; padding: 2px 0;"
         )
 
+    def create_layout(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(scroll)
-        layout.addWidget(hint)
+        layout.addWidget(self._scroll)
+        layout.addWidget(self._hint)
+
+    def create_connections(self):
+        pass
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:

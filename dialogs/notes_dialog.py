@@ -32,6 +32,8 @@ class _NoteCard(QWidget):
         clicked.  Pass None (or omit) to hide the delete button.
         """
         super().__init__(parent)
+        self._note = note
+        self._on_delete = on_delete
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             QWidget {{
@@ -40,39 +42,34 @@ class _NoteCard(QWidget):
                 border-radius: 6px;
             }}
         """)
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
-
-        # ── Header row: author • date  [×] ──────────────────────────────
-        date_str = note.get("date", "")
+    def create_widgets(self):
+        date_str = self._note.get("date", "")
         try:
             dt = datetime.datetime.fromisoformat(date_str)
             date_str = dt.strftime("%Y-%m-%d  %H:%M")
         except Exception:
             pass
 
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(4)
-
-        header = QLabel(f"{note.get('author', 'Unknown')}  •  {date_str}")
-        header.setStyleSheet(
+        self._header_lbl = QLabel(f"{self._note.get('author', 'Unknown')}  •  {date_str}")
+        self._header_lbl.setStyleSheet(
             f"background: transparent; border: none;"
             f"color: {constants.ACCENT_HI}; font-size: 11px; font-weight: bold;"
         )
-        header_row.addWidget(header, stretch=1)
 
-        if on_delete is not None:
-            note_id = note.get("id", "")
-            del_btn = QPushButton()
-            del_btn.setIcon(QIcon(str(constants.ICONS_DIR / "bin.png")))
-            del_btn.setIconSize(QSize(14, 14))
-            del_btn.setFixedSize(20, 20)
-            del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setToolTip("Delete note")
-            del_btn.setStyleSheet(f"""
+        self._del_btn = None
+        if self._on_delete is not None:
+            self._note_id = self._note.get("id", "")
+            self._del_btn = QPushButton()
+            self._del_btn.setIcon(QIcon(str(constants.ICONS_DIR / "bin.png")))
+            self._del_btn.setIconSize(QSize(14, 14))
+            self._del_btn.setFixedSize(20, 20)
+            self._del_btn.setCursor(Qt.PointingHandCursor)
+            self._del_btn.setToolTip("Delete note")
+            self._del_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
                     border: none;
@@ -82,19 +79,33 @@ class _NoteCard(QWidget):
                     background-color: {constants.FAIL};
                 }}
             """)
-            del_btn.clicked.connect(lambda: on_delete(note_id))
-            header_row.addWidget(del_btn)
 
-        content_label = QLabel(note.get("content", ""))
-        content_label.setWordWrap(True)
-        content_label.setStyleSheet(
+        self._content_lbl = QLabel(self._note.get("content", ""))
+        self._content_lbl.setWordWrap(True)
+        self._content_lbl.setStyleSheet(
             f"background: transparent; border: none;"
             f"color: {constants.TEXT_PRI}; font-size: 12px;"
         )
-        content_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._content_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+    def create_layout(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(4)
+        header_row.addWidget(self._header_lbl, stretch=1)
+        if self._del_btn is not None:
+            header_row.addWidget(self._del_btn)
 
         layout.addLayout(header_row)
-        layout.addWidget(content_label)
+        layout.addWidget(self._content_lbl)
+
+    def create_connections(self):
+        if self._del_btn is not None:
+            self._del_btn.clicked.connect(lambda: self._on_delete(self._note_id))
 
 
 # ──────────────────────────────────────────────────────────────────────────── #
@@ -112,53 +123,32 @@ class _AuthorInputDialog(QDialog):
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
         self.setStyleSheet(f"background-color: {constants.BORDER};")
         self._author = ""
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(24, 20, 24, 20)
-        outer.setSpacing(0)
-
-        # ── Icon ─────────────────────────────────────────────────────────
-        icon_lbl = QLabel()
+    def create_widgets(self):
+        self._icon_lbl = QLabel()
         pix = QPixmap(str(constants.ICONS_DIR / "add_note.png"))
         if not pix.isNull():
-            icon_lbl.setPixmap(
+            self._icon_lbl.setPixmap(
                 pix.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
-        icon_lbl.setAlignment(Qt.AlignCenter)
-        icon_lbl.setStyleSheet("background: transparent;")
-        outer.addWidget(icon_lbl)
-        outer.addSpacing(10)
+        self._icon_lbl.setAlignment(Qt.AlignCenter)
+        self._icon_lbl.setStyleSheet("background: transparent;")
 
-        # ── Title ─────────────────────────────────────────────────────────
-        title_lbl = QLabel("Add Note")
-        title_lbl.setAlignment(Qt.AlignCenter)
-        title_lbl.setStyleSheet(f"""
-            font-size: 15px;
-            font-weight: bold;
-            color: {constants.TEXT_PRI};
-            background: transparent;
+        self._title_lbl = QLabel("Add Note")
+        self._title_lbl.setAlignment(Qt.AlignCenter)
+        self._title_lbl.setStyleSheet(f"""
+            font-size: 15px; font-weight: bold;
+            color: {constants.TEXT_PRI}; background: transparent;
         """)
-        outer.addWidget(title_lbl)
-        outer.addSpacing(4)
 
-        # ── Subtitle ──────────────────────────────────────────────────────
-        sub_lbl = QLabel("Sign your note with your name.")
-        sub_lbl.setAlignment(Qt.AlignCenter)
-        sub_lbl.setStyleSheet(f"""
-            font-size: 11px;
-            color: {constants.TEXT_SEC};
-            background: transparent;
+        self._sub_lbl = QLabel("Sign your note with your name.")
+        self._sub_lbl.setAlignment(Qt.AlignCenter)
+        self._sub_lbl.setStyleSheet(f"""
+            font-size: 11px; color: {constants.TEXT_SEC}; background: transparent;
         """)
-        outer.addWidget(sub_lbl)
-        outer.addSpacing(16)
-
-        # ── Name field ────────────────────────────────────────────────────
-        name_lbl = QLabel("Your name")
-        name_lbl.setStyleSheet(
-            f"color: {constants.TEXT_SEC}; background: transparent; font-size: 11px;"
-        )
-        outer.addWidget(name_lbl)
-        outer.addSpacing(4)
 
         self._name_field = QLineEdit()
         self._name_field.setPlaceholderText("e.g.  John Smith")
@@ -172,14 +162,9 @@ class _AuthorInputDialog(QDialog):
                 padding: 4px 10px;
                 font-size: 13px;
             }}
-            QLineEdit:focus {{
-                border: 1px solid {constants.ACCENT_HI};
-            }}
+            QLineEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
         """)
-        self._name_field.returnPressed.connect(self._on_confirm)
-        outer.addWidget(self._name_field)
 
-        # ── Error label ───────────────────────────────────────────────────
         self._error_lbl = QLabel()
         self._error_lbl.setAlignment(Qt.AlignCenter)
         self._error_lbl.setFixedHeight(16)
@@ -187,54 +172,68 @@ class _AuthorInputDialog(QDialog):
             f"color: {constants.FAIL}; background: transparent; font-size: 11px;"
         )
         self._error_lbl.setVisible(False)
-        outer.addSpacing(4)
-        outer.addWidget(self._error_lbl)
-        outer.addSpacing(14)
 
-        # ── Buttons ───────────────────────────────────────────────────────
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setFixedHeight(30)
-        cancel_btn.setCursor(Qt.PointingHandCursor)
-        cancel_btn.setStyleSheet(f"""
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setFixedHeight(30)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {constants.ACCENT};
                 color: {constants.TEXT_SEC};
-                border: none;
-                border-radius: 4px;
-                padding: 4px 14px;
+                border: none; border-radius: 4px; padding: 4px 14px;
             }}
             QPushButton:hover {{
                 background-color: {constants.SPLITTER_COLOR};
                 color: {constants.TEXT_PRI};
             }}
         """)
-        cancel_btn.clicked.connect(self.reject)
 
-        add_btn = QPushButton("Add Note")
-        add_btn.setFixedHeight(30)
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setStyleSheet(f"""
+        self._add_btn = QPushButton("Add Note")
+        self._add_btn.setFixedHeight(30)
+        self._add_btn.setCursor(Qt.PointingHandCursor)
+        self._add_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {constants.ACCENT_HI};
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 16px;
-                font-weight: bold;
+                color: white; border: none; border-radius: 4px;
+                padding: 4px 16px; font-weight: bold;
             }}
-            QPushButton:hover {{
-                background-color: #1a95e8;
-            }}
+            QPushButton:hover {{ background-color: #1a95e8; }}
         """)
-        add_btn.clicked.connect(self._on_confirm)
 
-        btn_row.addWidget(cancel_btn)
+    def create_layout(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(24, 20, 24, 20)
+        outer.setSpacing(0)
+
+        outer.addWidget(self._icon_lbl)
+        outer.addSpacing(10)
+        outer.addWidget(self._title_lbl)
+        outer.addSpacing(4)
+        outer.addWidget(self._sub_lbl)
+        outer.addSpacing(16)
+
+        name_lbl = QLabel("Your name")
+        name_lbl.setStyleSheet(
+            f"color: {constants.TEXT_SEC}; background: transparent; font-size: 11px;"
+        )
+        outer.addWidget(name_lbl)
+        outer.addSpacing(4)
+        outer.addWidget(self._name_field)
+        outer.addSpacing(4)
+        outer.addWidget(self._error_lbl)
+        outer.addSpacing(14)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.addWidget(self._cancel_btn)
         btn_row.addStretch()
-        btn_row.addWidget(add_btn)
+        btn_row.addWidget(self._add_btn)
         outer.addLayout(btn_row)
+
+    def create_connections(self):
+        self._name_field.returnPressed.connect(self._on_confirm)
+        self._cancel_btn.clicked.connect(self.reject)
+        self._add_btn.clicked.connect(self._on_confirm)
 
     def _on_confirm(self):
         name = self._name_field.text().strip()
@@ -277,19 +276,16 @@ class NotesDialog(QDialog):
             | Qt.WindowMaximizeButtonHint
         )
 
-        self._build_ui()
+        self.create_widgets()
+        self.create_layout()
+        self.create_connections()
         self._load_notes()
 
     # ------------------------------------------------------------------ #
     #  UI construction                                                      #
     # ------------------------------------------------------------------ #
 
-    def _build_ui(self):
-        main = QVBoxLayout(self)
-        main.setContentsMargins(12, 12, 12, 12)
-        main.setSpacing(8)
-
-        # ── Scrollable notes list ────────────────────────────────────────
+    def create_widgets(self):
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.NoFrame)
@@ -303,16 +299,8 @@ class NotesDialog(QDialog):
         self._cards_layout.setSpacing(6)
         self._scroll.setWidget(self._cards_widget)
 
-        main.addWidget(self._scroll, stretch=1)
-
-        # ── Separator ────────────────────────────────────────────────────
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
-        main.addWidget(sep)
-
-        # ── Input area (reviewer + admin) / locked message ───────────────
+        self._note_input = None
+        self._add_btn = None
         if constants.can_review():
             self._note_input = QTextEdit()
             self._note_input.setPlaceholderText("Write a note…")
@@ -325,37 +313,42 @@ class NotesDialog(QDialog):
                     border-radius: 4px;
                     padding: 6px;
                 }}
-                QTextEdit:focus {{
-                    border: 1px solid {constants.ACCENT_HI};
-                }}
+                QTextEdit:focus {{ border: 1px solid {constants.ACCENT_HI}; }}
             """)
-            main.addWidget(self._note_input)
 
+            self._add_btn = QPushButton("Add Note")
+            self._add_btn.setFixedHeight(28)
+            self._add_btn.setMinimumWidth(90)
+            self._add_btn.setCursor(Qt.PointingHandCursor)
+            self._add_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {constants.ACCENT_HI};
+                    color: white; border: none; border-radius: 4px;
+                    padding: 4px 14px; font-weight: bold;
+                }}
+                QPushButton:hover {{ background-color: #1a95e8; }}
+            """)
+
+    def create_layout(self):
+        main = QVBoxLayout(self)
+        main.setContentsMargins(12, 12, 12, 12)
+        main.setSpacing(8)
+
+        main.addWidget(self._scroll, stretch=1)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background-color: {constants.SPLITTER_COLOR};")
+        main.addWidget(sep)
+
+        if self._note_input is not None:
+            main.addWidget(self._note_input)
             btn_row = QHBoxLayout()
             btn_row.setContentsMargins(0, 0, 0, 0)
             btn_row.addStretch()
-
-            add_btn = QPushButton("Add Note")
-            add_btn.setFixedHeight(28)
-            add_btn.setMinimumWidth(90)
-            add_btn.setCursor(Qt.PointingHandCursor)
-            add_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {constants.ACCENT_HI};
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 4px 14px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: #1a95e8;
-                }}
-            """)
-            add_btn.clicked.connect(self._on_add_note)
-            btn_row.addWidget(add_btn)
+            btn_row.addWidget(self._add_btn)
             main.addLayout(btn_row)
-
         else:
             locked_lbl = QLabel("Unlock admin mode to add notes.")
             locked_lbl.setAlignment(Qt.AlignCenter)
@@ -363,6 +356,10 @@ class NotesDialog(QDialog):
                 f"color: {constants.TEXT_SEC}; background: transparent; font-size: 11px;"
             )
             main.addWidget(locked_lbl)
+
+    def create_connections(self):
+        if self._add_btn is not None:
+            self._add_btn.clicked.connect(self._on_add_note)
 
     # ------------------------------------------------------------------ #
     #  Notes list                                                           #
