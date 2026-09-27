@@ -77,7 +77,7 @@ This makes BlastVault easy to drop into an existing pipeline: nothing needs to b
 - [FFmpeg](https://ffmpeg.org/) (`ffmpeg` + `ffprobe`) available on your `PATH`, or installed in a common location — BlastVault auto-detects it and lets you verify the detected path from *Settings → Tools*.
 
 ```bash
-git clone https://github.com/<your-username>/BlastVault.git
+git clone https://github.com/kaywizzy123/BlastVault.git
 cd BlastVault
 pip install PyQt5
 ```
