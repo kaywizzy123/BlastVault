@@ -190,4 +190,4 @@ BlastVault/
 
 ## License
 
-No license has been chosen yet for this project. Add a `LICENSE` file to specify the terms under which others may use this code.
+Released under the [MIT License](LICENSE).
