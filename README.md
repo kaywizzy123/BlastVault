@@ -143,7 +143,7 @@ For teams, BlastVault can defer identity and permissions to a shared **artist re
 
 ## Playback (BlastPlayer integration)
 
-BlastVault is designed to pair with a companion player app, **[BlastPlayer](../../BlastPlayer)**, launched as a separate process for each shot (or a full playlist via "Play all in BlastPlayer"). If BlastPlayer isn't found next to BlastVault, playback falls back to your OS's default handler for the file, or to any custom player you've registered in Settings.
+BlastVault is designed to pair with a companion player app, **[BlastPlayer](https://github.com/kaywizzy123/BlastPlayer)**, launched as a separate process for each shot (or a full playlist via "Play all in BlastPlayer"). By default BlastVault looks for it as a sibling folder next to BlastVault on disk (or at the path configured in `blast_player_path`); if it isn't found, playback falls back to your OS's default handler for the file, or to any custom player you've registered in Settings.
 
 ## Project Structure
 
